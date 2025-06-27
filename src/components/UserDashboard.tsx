@@ -17,8 +17,7 @@ import {
   ExternalLink
 } from 'lucide-react'
 import { TransactionService } from '../services/TransactionService'
-import { AlgorandSubscriber } from '@algorandfoundation/algokit-subscriber'
-import { formatAlgoAmount, algodClient } from '../services/algorandService'
+import { formatAlgoAmount } from '../services/algorandService'
 
 interface PortfolioHolding {
   propertyId: string
@@ -171,65 +170,19 @@ export function UserDashboard() {
     refetchInterval: 30000, // Refetch every 30 seconds
   })
 
-  // Set up real-time blockchain subscriber
+  // Removed AlgorandSubscriber setup due to BigInt compatibility issues
+  // Will use polling-based updates instead
   useEffect(() => {
     if (!activeAddress) return
 
-    let subscriber: AlgorandSubscriber | null = null
-
-    const setupSubscriber = async () => {
-      try {
-        subscriber = new AlgorandSubscriber({
-          filters: [
-            {
-              name: 'asset-transfers',
-              filter: {
-                sender: activeAddress,
-                receiver: activeAddress
-              }
-            },
-            {
-              name: 'payments',
-              filter: {
-                sender: activeAddress,
-                receiver: activeAddress
-              }
-            }
-          ],
-          maxRoundsToSync: 100,
-          syncBehaviour: 'sync-oldest',
-          watermarkPersistence: {
-            get: async () => 0,
-            set: async () => {}
-          }
-        }, algodClient)
-
-        subscriber.on('asset-transfers', (transaction) => {
-          console.log('Asset transfer detected:', transaction)
-          // Update holdings when asset transfers are detected
-          refetchAssets()
-          setLastUpdated(new Date())
-        })
-
-        subscriber.on('payments', (transaction) => {
-          console.log('Payment detected:', transaction)
-          // Update when payments are detected
-          refetchAssets()
-          setLastUpdated(new Date())
-        })
-
-        await subscriber.start()
-      } catch (error) {
-        console.error('Error setting up blockchain subscriber:', error)
-      }
-    }
-
-    setupSubscriber()
+    // Set up periodic refresh instead of real-time subscriber
+    const interval = setInterval(() => {
+      refetchAssets()
+      setLastUpdated(new Date())
+    }, 30000) // Refresh every 30 seconds
 
     return () => {
-      if (subscriber) {
-        subscriber.stop()
-      }
+      clearInterval(interval)
     }
   }, [activeAddress, refetchAssets])
 
