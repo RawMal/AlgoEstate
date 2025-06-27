@@ -21,17 +21,16 @@ export const useAdminAuth = () => {
         setIsLoading(true)
         setError(null)
 
-        // Admin wallet addresses - Add your wallet address here
+        // Admin wallet addresses - Your wallet is now included
         const adminWallets = [
-          // Add your actual wallet address here (58 characters long)
-          // Example: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567890ABCDEFGHIJKLMNOPQR',
+          // Your actual wallet address
+          'WX3BSTBIHAEO5FV3VRA22AFXIHCQWNR7U7G3KWERNPMUFCVCXMS4GQAWQ4',
           
-          // For testing purposes, you can also use these patterns:
+          // Additional admin wallets can be added here
+          'ADMINWALLETADDRESSEXAMPLEALGORANDTESTNET123456789ABCDEF',
+          
           // Any wallet containing 'ADMIN' (for demo wallets)
           ...(activeAddress.includes('ADMIN') ? [activeAddress] : []),
-          
-          // You can also add specific test addresses
-          'ADMINWALLETADDRESSEXAMPLEALGORANDTESTNET123456789ABCDEF',
         ]
 
         // Check if the current wallet is in the admin list
@@ -46,9 +45,13 @@ export const useAdminAuth = () => {
 
         // Determine admin email and role based on wallet
         let mockEmail = 'admin@algoestate.com'
-        let role: 'admin' | 'super_admin' | 'property_manager' = 'admin'
+        let role: 'admin' | 'super_admin' | 'property_manager' = 'super_admin' // Give you super admin access
 
-        if (activeAddress.includes('SUPER')) {
+        // Your wallet gets super admin privileges
+        if (activeAddress === 'WX3BSTBIHAEO5FV3VRA22AFXIHCQWNR7U7G3KWERNPMUFCVCXMS4GQAWQ4') {
+          mockEmail = 'super@algoestate.com'
+          role = 'super_admin'
+        } else if (activeAddress.includes('SUPER')) {
           mockEmail = 'super@algoestate.com'
           role = 'super_admin'
         } else if (activeAddress.includes('MANAGER')) {
