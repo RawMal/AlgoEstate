@@ -9,6 +9,13 @@ import algosdk from 'algosdk'
 // Algorand client configuration
 export const algorandClient = AlgorandClient.testNet()
 
+// Export the algod client directly for AlgorandSubscriber
+export const algodClient = new algosdk.Algodv2(
+  '',
+  'https://testnet-api.algonode.cloud',
+  ''
+)
+
 // Property token configuration
 export interface PropertyToken {
   assetId: number

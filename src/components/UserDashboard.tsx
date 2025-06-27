@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import { TransactionService } from '../services/TransactionService'
 import { AlgorandSubscriber } from '@algorandfoundation/algokit-subscriber'
-import { formatAlgoAmount, algorandClient } from '../services/algorandService'
+import { formatAlgoAmount, algodClient } from '../services/algorandService'
 
 interface PortfolioHolding {
   propertyId: string
@@ -202,7 +202,7 @@ export function UserDashboard() {
             get: async () => 0,
             set: async () => {}
           }
-        }, algorandClient.client)
+        }, algodClient)
 
         subscriber.on('asset-transfers', (transaction) => {
           console.log('Asset transfer detected:', transaction)
