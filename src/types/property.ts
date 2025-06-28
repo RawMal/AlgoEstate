@@ -1,5 +1,4 @@
 export interface Property {
-  // Required fields that exist in database
   id: string
   name: string
   address: {
