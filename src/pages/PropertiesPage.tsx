@@ -23,14 +23,20 @@ export function PropertiesPage() {
   const priceRanges = ['All Prices', '$0 - $500', '$500 - $1,000', '$1,000 - $2,500', '$2,500+']
 
   const filteredProperties = properties.filter(property => {
-    const matchesSearch = property.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         property.location.toLowerCase().includes(searchTerm.toLowerCase())
+    // Extract location from address object
+    const propertyLocation = property.address?.city || property.address?.state || ''
+    
+    const matchesSearch = 
+      (property.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      propertyLocation.toLowerCase().includes(searchTerm.toLowerCase()))
+    
     const matchesLocation = !selectedLocation || selectedLocation === 'All Locations' || 
-                           property.location.includes(selectedLocation)
+      (property.address?.city && property.address.city.includes(selectedLocation)) ||
+      (property.address?.state && property.address.state.includes(selectedLocation))
     
     let matchesPrice = true
     if (priceRange && priceRange !== 'All Prices') {
-      const tokenPrice = property.tokenPrice
+      const tokenPrice = property.token_price
       switch (priceRange) {
         case '$0 - $500':
           matchesPrice = tokenPrice <= 500
@@ -50,18 +56,37 @@ export function PropertiesPage() {
     return matchesSearch && matchesLocation && matchesPrice
   })
 
+  // Add derived properties for backward compatibility
+  const enhancedProperties = filteredProperties.map(property => ({
+    ...property,
+    title: property.name,
+    location: property.address?.city && property.address?.state 
+      ? `${property.address.city}, ${property.address.state}` 
+      : property.address?.city || property.address?.state || 'Location not specified',
+    image: property.image_url || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+    totalValue: property.total_value,
+    tokenPrice: property.token_price,
+    totalTokens: property.total_tokens,
+    availableTokens: property.available_tokens,
+    tokens_sold: property.total_tokens - property.available_tokens,
+    status: property.status || 'available',
+    expectedYield: property.expectedYield || 8.0, // Default expected yield
+    minInvestment: property.minInvestment || property.token_price * 2, // Default min investment
+    listingDate: property.created_at
+  }))
+
   // Sort properties
-  const sortedProperties = [...filteredProperties].sort((a, b) => {
+  const sortedProperties = [...enhancedProperties].sort((a, b) => {
     switch (sortBy) {
       case 'price-low':
-        return a.tokenPrice - b.tokenPrice
+        return a.token_price - b.token_price
       case 'price-high':
-        return b.tokenPrice - a.tokenPrice
+        return b.token_price - a.token_price
       case 'yield':
-        return b.expectedYield - a.expectedYield
+        return (b.expectedYield || 0) - (a.expectedYield || 0)
       case 'newest':
       default:
-        return new Date(b.listingDate).getTime() - new Date(a.listingDate).getTime()
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     }
   })
 
