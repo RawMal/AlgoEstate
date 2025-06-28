@@ -1,9 +1,10 @@
 import { Link } from 'react-router-dom'
 import { MapPin, TrendingUp, Users, Calendar } from 'lucide-react'
+import { Property } from '../types/property'
 
 interface PropertyCardProps {
-  property: any // Using any for now since we're working with database structure
-  onInvestClick: (property: any) => void
+  property: Property
+  onInvestClick: (property: Property) => void
 }
 
 export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
@@ -36,14 +37,14 @@ export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
   }
 
   // Calculate expected yield (using a default since it's not in the schema)
-  const expectedYield = 8.0 // Default yield percentage
+  const expectedYield = property.expectedYield || 8.0 // Default yield percentage
 
   return (
     <div className="group bg-white/30 dark:bg-secondary-800/30 backdrop-blur-md rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 overflow-hidden border border-white/20 dark:border-secondary-700/30">
       {/* Image - Clickable to navigate to detail page */}
       <Link to={`/property/${property.id}`} className="block aspect-video overflow-hidden">
         <img
-          src={placeholderImage}
+          src={property.image_url || placeholderImage}
           alt={property.name}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
         />
