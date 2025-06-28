@@ -1,22 +1,50 @@
 import { Link } from 'react-router-dom'
 import { MapPin, TrendingUp, Users, Calendar } from 'lucide-react'
-import { Property } from '../types/property'
 
 interface PropertyCardProps {
-  property: Property
-  onInvestClick: (property: Property) => void
+  property: any // Using any for now since we're working with database structure
+  onInvestClick: (property: any) => void
 }
 
 export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
-  const fundingProgress = ((property.totalTokens - property.availableTokens) / property.totalTokens) * 100
+  // Calculate funding progress using available_tokens and total_tokens
+  const fundingProgress = property.total_tokens > 0 
+    ? ((property.total_tokens - property.available_tokens) / property.total_tokens) * 100 
+    : 0
+
+  // Extract location from address JSONB
+  const getLocation = () => {
+    if (property.address && typeof property.address === 'object') {
+      const city = property.address.city || ''
+      const state = property.address.state || ''
+      return city && state ? `${city}, ${state}` : city || state || 'Location not specified'
+    }
+    return 'Location not specified'
+  }
+
+  // Use placeholder image since image_url doesn't exist in schema
+  const placeholderImage = 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80'
+
+  // Format currency
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount)
+  }
+
+  // Calculate expected yield (using a default since it's not in the schema)
+  const expectedYield = 8.0 // Default yield percentage
 
   return (
     <div className="group bg-white/30 dark:bg-secondary-800/30 backdrop-blur-md rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 overflow-hidden border border-white/20 dark:border-secondary-700/30">
       {/* Image - Clickable to navigate to detail page */}
       <Link to={`/property/${property.id}`} className="block aspect-video overflow-hidden">
         <img
-          src={property.image}
-          alt={property.title}
+          src={placeholderImage}
+          alt={property.name}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
         />
       </Link>
@@ -27,25 +55,25 @@ export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
         <div className="mb-4">
           <Link to={`/property/${property.id}`}>
             <h3 className="text-xl font-semibold text-secondary-900 dark:text-white mb-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors cursor-pointer">
-              {property.title}
+              {property.name}
             </h3>
           </Link>
           <div className="flex items-center text-secondary-600 dark:text-secondary-400">
             <MapPin className="h-4 w-4 mr-1" />
-            <span className="text-sm">{property.location}</span>
+            <span className="text-sm">{getLocation()}</span>
           </div>
         </div>
 
         {/* Property Value and Available Tokens */}
         <div className="mb-4">
           <div className="text-2xl font-bold text-primary-600 dark:text-primary-400 mb-1">
-            ${property.totalValue.toLocaleString()}
+            {formatCurrency(property.total_value)}
           </div>
           <div className="text-sm text-secondary-600 dark:text-secondary-400">
             Total Property Value
           </div>
           <div className="text-sm text-secondary-600 dark:text-secondary-400 mt-1">
-            {property.availableTokens.toLocaleString()} tokens available
+            {property.available_tokens.toLocaleString()} tokens available
           </div>
         </div>
 
@@ -53,7 +81,7 @@ export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div className="text-center bg-white/20 dark:bg-secondary-700/20 backdrop-blur-sm rounded-xl p-3">
             <div className="text-lg font-bold text-primary-600 dark:text-primary-400">
-              ${property.tokenPrice}
+              ${property.token_price}
             </div>
             <div className="text-xs text-secondary-500 dark:text-secondary-400">
               Per Token
@@ -61,7 +89,7 @@ export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
           </div>
           <div className="text-center bg-white/20 dark:bg-secondary-700/20 backdrop-blur-sm rounded-xl p-3">
             <div className="text-lg font-bold text-accent-600 dark:text-accent-400">
-              {property.expectedYield}%
+              {expectedYield}%
             </div>
             <div className="text-xs text-secondary-500 dark:text-secondary-400">
               Expected Yield
@@ -90,11 +118,11 @@ export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
           <div className="flex items-center space-x-4 text-sm text-secondary-500 dark:text-secondary-400">
             <div className="flex items-center">
               <Users className="h-4 w-4 mr-1" />
-              {property.totalTokens - property.availableTokens}
+              {property.total_tokens - property.available_tokens}
             </div>
             <div className="flex items-center">
               <Calendar className="h-4 w-4 mr-1" />
-              {property.listingDate}
+              {new Date(property.created_at).toLocaleDateString()}
             </div>
           </div>
           <div className="flex space-x-2">
