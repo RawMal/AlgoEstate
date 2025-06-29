@@ -55,9 +55,9 @@ export function AddPropertyModal({ isOpen, onClose, onSuccess }: AddPropertyModa
     country: 'USA',
     zipCode: '',
     propertyType: 'house',
-    bedrooms: 1,
-    bathrooms: 1,
-    squarefoot: 1000,
+    bedrooms: 0,
+    bathrooms: 0,
+    squarefoot: 0,
     totalValue: 100000,
     images: []
   })
@@ -253,7 +253,7 @@ export function AddPropertyModal({ isOpen, onClose, onSuccess }: AddPropertyModa
       console.log('Creating asset with parameters:', {
         sender: activeAddress,
         total: totalTokens,
-        assetName: `${formData.name} Property Token`,
+        assetName: `${formData.name.length > 16 ? formData.name.substring(0, 16) : formData.name} Property Token`.substring(0, 32),
         unitName: unitName,
         manager: activeAddress,
         reserve: activeAddress,
@@ -266,7 +266,7 @@ export function AddPropertyModal({ isOpen, onClose, onSuccess }: AddPropertyModa
         sender: activeAddress,  // Changed from 'from' to 'sender'
         total: totalTokens,
         decimals: 0, // Indivisible tokens
-        assetName: `${formData.name} Property Token`,
+        assetName: `${formData.name.length > 16 ? formData.name.substring(0, 16) : formData.name} Property Token`.substring(0, 32),
         unitName: unitName,
         url: coverImageUrl || `https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80`,
         defaultFrozen: false,
@@ -419,9 +419,9 @@ export function AddPropertyModal({ isOpen, onClose, onSuccess }: AddPropertyModa
         country: 'USA',
         zipCode: '',
         propertyType: 'house',
-        bedrooms: 1,
-        bathrooms: 1,
-        squarefoot: 1000,
+        bedrooms: 0,
+        bathrooms: 0,
+        squarefoot: 0,
         totalValue: 100000,
         images: []
       })
@@ -550,36 +550,38 @@ export function AddPropertyModal({ isOpen, onClose, onSuccess }: AddPropertyModa
                     </label>
                     <input
                       type="number"
-                      value={formData.squarefoot}
+                      value={formData.squarefoot || ''}
                       onChange={(e) => handleInputChange('squarefoot', parseInt(e.target.value) || 0)}
                       min="1"
+                      placeholder="Enter square footage"
                       className="w-full px-4 py-3 bg-white/70 dark:bg-secondary-700/70 backdrop-blur-sm border border-secondary-300/50 dark:border-secondary-600/50 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
-                      Bedrooms
+                      Bedrooms *
                     </label>
                     <input
                       type="number"
-                      value={formData.bedrooms}
+                      value={formData.bedrooms || ''}
                       onChange={(e) => handleInputChange('bedrooms', parseInt(e.target.value) || 0)}
                       min="0"
+                      placeholder="Enter number of bedrooms"
                       className="w-full px-4 py-3 bg-white/70 dark:bg-secondary-700/70 backdrop-blur-sm border border-secondary-300/50 dark:border-secondary-600/50 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     />
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
-                      Bathrooms
+                      Bathrooms *
                     </label>
                     <input
                       type="number"
-                      value={formData.bathrooms}
-                      onChange={(e) => handleInputChange('bathrooms', parseFloat(e.target.value) || 0)}
+                      value={formData.bathrooms || ''}
+                      onChange={(e) => handleInputChange('bathrooms', parseInt(e.target.value) || 0)}
                       min="0"
-                      step="0.5"
+                      placeholder="Enter number of bathrooms"
                       className="w-full px-4 py-3 bg-white/70 dark:bg-secondary-700/70 backdrop-blur-sm border border-secondary-300/50 dark:border-secondary-600/50 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     />
                   </div>

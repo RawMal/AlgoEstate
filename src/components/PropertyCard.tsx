@@ -4,10 +4,9 @@ import { Property } from '../types/property'
 
 interface PropertyCardProps {
   property: Property
-  onInvestClick: (property: Property) => void
 }
 
-export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
+export function PropertyCard({ property }: PropertyCardProps) {
   // Property data loaded successfully
   
   // Calculate funding progress using database fields (ensure consistent number conversion)
@@ -135,8 +134,8 @@ export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4 text-sm text-secondary-500 dark:text-secondary-400">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between text-sm text-secondary-500 dark:text-secondary-400">
             <div className="flex items-center">
               <Users className="h-4 w-4 mr-1" />
               {soldTokens > 0 ? `${soldTokens} tokens sold` : 'No sales yet'}
@@ -146,20 +145,12 @@ export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
               {new Date(prop.created_at).toLocaleDateString()}
             </div>
           </div>
-          <div className="flex space-x-2">
-            <Link
-              to={`/property/${prop.id}`}
-              className="inline-flex items-center px-3 py-2 bg-secondary-600/80 hover:bg-secondary-700 backdrop-blur-sm text-white text-sm font-medium rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg"
-            >
-              View Details
-            </Link>
-            <button
-              onClick={() => onInvestClick(property)}
-              className="inline-flex items-center px-4 py-2 bg-primary-600/80 hover:bg-primary-700 backdrop-blur-sm text-white text-sm font-medium rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg"
-            >
-              Invest Now
-            </button>
-          </div>
+          <Link
+            to={`/property/${prop.id}`}
+            className="w-full inline-flex items-center justify-center px-4 py-3 bg-primary-600/80 hover:bg-primary-700 backdrop-blur-sm text-white text-sm font-medium rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg"
+          >
+            View Details
+          </Link>
         </div>
       </div>
     </div>

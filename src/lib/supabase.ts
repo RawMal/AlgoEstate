@@ -59,10 +59,29 @@ export const getCurrentUser = async () => {
   return user
 }
 
-// Helper function to sign out
+// Helper function to sign out (Supabase only)
 export const signOut = async () => {
   const { error } = await supabase.auth.signOut()
   if (error) throw error
+}
+
+// Complete logout function that also disconnects wallet
+// Note: This should be used from components that have access to wallet context
+export const createLogoutHandler = (disconnectWallet?: () => Promise<void>) => {
+  return async () => {
+    try {
+      // Disconnect wallet first if available
+      if (disconnectWallet) {
+        await disconnectWallet()
+      }
+      // Then sign out from Supabase
+      await signOut()
+    } catch (error) {
+      console.error('Error during logout:', error)
+      // Still attempt to sign out from Supabase even if wallet disconnection fails
+      await signOut()
+    }
+  }
 }
 
 export type { Database }

@@ -52,7 +52,7 @@ export class PropertyTokenizationService {
         decimals: 0, // Property tokens are indivisible
         defaultFrozen: false,
         unitName: `${property.name.substring(0, 8).toUpperCase()}TKN`,
-        assetName: `${property.name} Property Token`,
+        assetName: `${property.name.length > 16 ? property.name.substring(0, 16) : property.name} Property Token`.substring(0, 32),
         url: property.imageUrl,
         metadataHash: metadataHash.length <= 32 ? metadataHash : undefined,
         manager: creatorAddress,
@@ -265,7 +265,7 @@ export class PropertyTokenizationService {
    */
   private createTokenMetadata(property: PropertyDetails): TokenMetadata {
     return {
-      name: `${property.name} Property Token`,
+      name: `${property.name.length > 16 ? property.name.substring(0, 16) : property.name} Property Token`.substring(0, 32),
       description: property.description,
       image: property.imageUrl || '',
       external_url: `https://algoestate.com/property/${property.id}`,

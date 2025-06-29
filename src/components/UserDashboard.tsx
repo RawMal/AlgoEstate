@@ -111,7 +111,7 @@ export function UserDashboard() {
         return {
           propertyId: item.property_id,
           propertyTitle: item.property_name,
-          propertyImage: getPropertyImage(item.property_name),
+          propertyImage: item.property_image,
           assetId: item.asa_id || 0,
           tokensOwned: item.token_amount,
           tokenPrice,
