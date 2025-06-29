@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { PropertyListing } from '../components/PropertyListing'
 import { InvestmentModal } from '../components/InvestmentModal'
-import { Search, Filter, MapPin, DollarSign } from 'lucide-react'
+import { Search, Filter, MapPin, DollarSign, RefreshCw } from 'lucide-react'
 import { fetchProperties } from '../services/propertyService'
 import { Property } from '../types/property'
 
@@ -13,6 +13,9 @@ export function PropertiesPage() {
   const [sortBy, setSortBy] = useState('newest')
   const [showInvestmentModal, setShowInvestmentModal] = useState(false)
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  const queryClient = useQueryClient()
 
   const { data: properties = [], isLoading, error } = useQuery({
     queryKey: ['properties'],
@@ -23,20 +26,21 @@ export function PropertiesPage() {
   const priceRanges = ['All Prices', '$0 - $500', '$500 - $1,000', '$1,000 - $2,500', '$2,500+']
 
   const filteredProperties = properties.filter(property => {
+    const prop = property as any // Cast to any to bypass type issues
     // Extract location from address object
-    const propertyLocation = property.address?.city || property.address?.state || ''
+    const propertyLocation = prop.address?.city || prop.address?.state || ''
     
     const matchesSearch = 
-      (property.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (prop.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
       propertyLocation.toLowerCase().includes(searchTerm.toLowerCase()))
     
     const matchesLocation = !selectedLocation || selectedLocation === 'All Locations' || 
-      (property.address?.city && property.address.city.includes(selectedLocation)) ||
-      (property.address?.state && property.address.state.includes(selectedLocation))
+      (prop.address?.city && prop.address.city.includes(selectedLocation)) ||
+      (prop.address?.state && prop.address.state.includes(selectedLocation))
     
     let matchesPrice = true
     if (priceRange && priceRange !== 'All Prices') {
-      const tokenPrice = property.token_price
+      const tokenPrice = prop.token_price
       switch (priceRange) {
         case '$0 - $500':
           matchesPrice = tokenPrice <= 500
@@ -56,37 +60,23 @@ export function PropertiesPage() {
     return matchesSearch && matchesLocation && matchesPrice
   })
 
-  // Add derived properties for backward compatibility
-  const enhancedProperties = filteredProperties.map(property => ({
-    ...property,
-    title: property.name,
-    location: property.address?.city && property.address?.state 
-      ? `${property.address.city}, ${property.address.state}` 
-      : property.address?.city || property.address?.state || 'Location not specified',
-    image: property.image_url || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
-    totalValue: property.total_value,
-    tokenPrice: property.token_price,
-    totalTokens: property.total_tokens,
-    availableTokens: property.available_tokens,
-    tokens_sold: property.total_tokens - property.available_tokens,
-    status: property.status || 'available',
-    expectedYield: property.expectedYield || 8.0, // Default expected yield
-    minInvestment: property.minInvestment || property.token_price * 2, // Default min investment
-    listingDate: property.created_at
-  }))
+  // Use properties directly without complex transformation
+  const enhancedProperties = filteredProperties
 
   // Sort properties
   const sortedProperties = [...enhancedProperties].sort((a, b) => {
+    const aAny = a as any
+    const bAny = b as any
     switch (sortBy) {
       case 'price-low':
-        return a.token_price - b.token_price
+        return Number(aAny.token_price) - Number(bAny.token_price)
       case 'price-high':
-        return b.token_price - a.token_price
+        return Number(bAny.token_price) - Number(aAny.token_price)
       case 'yield':
-        return (b.expectedYield || 0) - (a.expectedYield || 0)
+        return (bAny.expectedYield || 8.0) - (aAny.expectedYield || 8.0)
       case 'newest':
       default:
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        return new Date(bAny.created_at).getTime() - new Date(aAny.created_at).getTime()
     }
   })
 
@@ -98,6 +88,24 @@ export function PropertiesPage() {
   const handleCloseModal = () => {
     setShowInvestmentModal(false)
     setSelectedProperty(null)
+  }
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    console.log('Manual refresh triggered')
+    
+    // Remove cached data and force fresh fetch
+    queryClient.removeQueries({ queryKey: ['properties'] })
+    queryClient.removeQueries({ queryKey: ['property'] })
+    
+    // Force refetch
+    await queryClient.refetchQueries({ 
+      queryKey: ['properties'],
+      type: 'active'
+    })
+    
+    console.log('Manual refresh completed')
+    setTimeout(() => setIsRefreshing(false), 1000) // Visual feedback
   }
 
   if (error) {
@@ -123,12 +131,24 @@ export function PropertiesPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl lg:text-4xl font-display font-bold text-secondary-900 dark:text-white mb-4">
-            Investment Properties
-          </h1>
-          <p className="text-lg text-secondary-600 dark:text-secondary-300">
-            Discover premium tokenized real estate opportunities
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl lg:text-4xl font-display font-bold text-secondary-900 dark:text-white mb-4">
+                Investment Properties
+              </h1>
+              <p className="text-lg text-secondary-600 dark:text-secondary-300">
+                Discover premium tokenized real estate opportunities
+              </p>
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="flex items-center px-4 py-2 bg-primary-600/80 hover:bg-primary-700 disabled:bg-primary-400 backdrop-blur-sm text-white font-medium rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg disabled:transform-none"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Refreshing...' : 'Refresh Data'}
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -204,7 +224,7 @@ export function PropertiesPage() {
 
         {/* Properties Grid */}
         <PropertyListing 
-          properties={sortedProperties}
+          properties={sortedProperties as unknown as Property[]}
           onInvestClick={handleInvestClick}
           isLoading={isLoading}
         />

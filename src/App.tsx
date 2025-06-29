@@ -15,7 +15,7 @@ import { PortfolioPage } from './pages/PortfolioPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { AdminPage } from './pages/AdminPage'
 import { AdminDashboardPage } from './pages/AdminDashboardPage'
-import { KYCPage } from './pages/KYCPage'
+import { AuthPage } from './pages/AuthPage'
 import { ThemeProvider } from './contexts/ThemeContext'
 
 const walletManager = new WalletManager({
@@ -35,7 +35,7 @@ const walletManager = new WalletManager({
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 0, // Always consider data stale, allow immediate refetch on invalidation
       gcTime: 10 * 60 * 1000, // 10 minutes
     },
   },
@@ -51,13 +51,13 @@ function App() {
               <Layout>
                 <Routes>
                   <Route path="/" element={<HomePage />} />
+                  <Route path="/auth" element={<AuthPage />} />
                   <Route path="/properties" element={<PropertiesPage />} />
                   <Route path="/property/:id" element={<PropertyDetailPage />} />
                   <Route path="/portfolio" element={<PortfolioPage />} />
                   <Route path="/dashboard" element={<DashboardPage />} />
                   <Route path="/admin" element={<AdminPage />} />
                   <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
-                  <Route path="/kyc" element={<KYCPage />} />
                 </Routes>
               </Layout>
             </Router>

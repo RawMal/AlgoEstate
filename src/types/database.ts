@@ -228,7 +228,7 @@ export interface UserPortfolioItem {
 
 export interface TokenPurchaseRecord {
   property_id: string
-  user_id: string
+  user_id?: string
   wallet_address: string
   token_amount: number
   transaction_id: string

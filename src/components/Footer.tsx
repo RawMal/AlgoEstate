@@ -38,7 +38,6 @@ export function Footer() {
             <ul className="space-y-2">
               <li><Link to="/properties" className="hover:text-primary-400 transition-colors">Browse Properties</Link></li>
               <li><Link to="/portfolio" className="hover:text-primary-400 transition-colors">My Portfolio</Link></li>
-              <li><Link to="/kyc" className="hover:text-primary-400 transition-colors">KYC Verification</Link></li>
             </ul>
           </div>
 

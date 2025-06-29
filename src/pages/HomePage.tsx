@@ -11,7 +11,7 @@ export function HomePage() {
     {
       icon: Shield,
       title: 'Secure & Compliant',
-      description: 'KYC verified platform with regulatory compliance'
+      description: 'Secure platform with regulatory compliance'
     },
     {
       icon: TrendingUp,
@@ -59,10 +59,10 @@ export function HomePage() {
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
                 <Link
-                  to="/kyc"
+                  to="/auth"
                   className="inline-flex items-center justify-center px-8 py-4 bg-white dark:bg-secondary-800 text-secondary-900 dark:text-white font-semibold rounded-xl border-2 border-secondary-200 dark:border-secondary-700 hover:border-primary-300 dark:hover:border-primary-600 transition-all duration-200"
                 >
-                  Get Verified
+                  Get Started
                 </Link>
               </div>
             </div>

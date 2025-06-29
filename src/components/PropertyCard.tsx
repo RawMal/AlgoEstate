@@ -8,16 +8,35 @@ interface PropertyCardProps {
 }
 
 export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
-  // Calculate funding progress using available_tokens and total_tokens
-  const fundingProgress = property.total_tokens > 0 
-    ? ((property.total_tokens - property.available_tokens) / property.total_tokens) * 100 
+  // Property data loaded successfully
+  
+  // Calculate funding progress using database fields (ensure consistent number conversion)
+  const prop = property as any
+  const totalTokens = parseInt(String(prop.total_tokens)) || 0
+  const availableTokens = parseInt(String(prop.available_tokens)) || 0
+  const tokenPrice = parseFloat(String(prop.token_price)) || 0
+  const soldTokens = Math.max(0, totalTokens - availableTokens)
+  const fundingProgress = totalTokens > 0 
+    ? Math.round(((soldTokens / totalTokens) * 100) * 100) / 100 // Round to 2 decimal places
     : 0
+
+  // Debug logging to track when PropertyCard renders with new data
+  console.log(`🏠 PropertyCard render - ${prop.name}:`)
+  console.log(`   📊 Available: ${availableTokens}/${totalTokens} tokens`)
+  console.log(`   📈 Sold: ${soldTokens} tokens`)
+  console.log(`   💯 Progress: ${fundingProgress}%`)
+  console.log(`   🔍 Raw prop data:`, {
+    available_tokens: prop.available_tokens,
+    total_tokens: prop.total_tokens,
+    converted_available: availableTokens,
+    converted_total: totalTokens
+  })
 
   // Extract location from address JSONB
   const getLocation = () => {
-    if (property.address && typeof property.address === 'object') {
-      const city = property.address.city || ''
-      const state = property.address.state || ''
+    if (prop.address && typeof prop.address === 'object') {
+      const city = prop.address.city || ''
+      const state = prop.address.state || ''
       return city && state ? `${city}, ${state}` : city || state || 'Location not specified'
     }
     return 'Location not specified'
@@ -42,10 +61,10 @@ export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
   return (
     <div className="group bg-white/30 dark:bg-secondary-800/30 backdrop-blur-md rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 overflow-hidden border border-white/20 dark:border-secondary-700/30">
       {/* Image - Clickable to navigate to detail page */}
-      <Link to={`/property/${property.id}`} className="block aspect-video overflow-hidden">
+      <Link to={`/property/${prop.id}`} className="block aspect-video overflow-hidden">
         <img
-          src={property.image_url || placeholderImage}
-          alt={property.name}
+          src={prop.image_url || placeholderImage}
+          alt={prop.name}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
         />
       </Link>
@@ -54,9 +73,9 @@ export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
       <div className="p-6">
         {/* Header - Title is clickable to navigate to detail page */}
         <div className="mb-4">
-          <Link to={`/property/${property.id}`}>
+          <Link to={`/property/${prop.id}`}>
             <h3 className="text-xl font-semibold text-secondary-900 dark:text-white mb-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors cursor-pointer">
-              {property.name}
+              {prop.name}
             </h3>
           </Link>
           <div className="flex items-center text-secondary-600 dark:text-secondary-400">
@@ -68,13 +87,13 @@ export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
         {/* Property Value and Available Tokens */}
         <div className="mb-4">
           <div className="text-2xl font-bold text-primary-600 dark:text-primary-400 mb-1">
-            {formatCurrency(property.total_value)}
+            {formatCurrency(Number(prop.total_value) || 0)}
           </div>
           <div className="text-sm text-secondary-600 dark:text-secondary-400">
             Total Property Value
           </div>
           <div className="text-sm text-secondary-600 dark:text-secondary-400 mt-1">
-            {property.available_tokens.toLocaleString()} tokens available
+            {availableTokens.toLocaleString()} tokens available
           </div>
         </div>
 
@@ -82,7 +101,7 @@ export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div className="text-center bg-white/20 dark:bg-secondary-700/20 backdrop-blur-sm rounded-xl p-3">
             <div className="text-lg font-bold text-primary-600 dark:text-primary-400">
-              ${property.token_price}
+              ${tokenPrice}
             </div>
             <div className="text-xs text-secondary-500 dark:text-secondary-400">
               Per Token
@@ -119,16 +138,16 @@ export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
           <div className="flex items-center space-x-4 text-sm text-secondary-500 dark:text-secondary-400">
             <div className="flex items-center">
               <Users className="h-4 w-4 mr-1" />
-              {property.total_tokens - property.available_tokens}
+              {soldTokens > 0 ? `${soldTokens} tokens sold` : 'No sales yet'}
             </div>
             <div className="flex items-center">
               <Calendar className="h-4 w-4 mr-1" />
-              {new Date(property.created_at).toLocaleDateString()}
+              {new Date(prop.created_at).toLocaleDateString()}
             </div>
           </div>
           <div className="flex space-x-2">
             <Link
-              to={`/property/${property.id}`}
+              to={`/property/${prop.id}`}
               className="inline-flex items-center px-3 py-2 bg-secondary-600/80 hover:bg-secondary-700 backdrop-blur-sm text-white text-sm font-medium rounded-lg transition-all duration-200 transform hover:scale-105 shadow-lg"
             >
               View Details

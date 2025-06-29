@@ -20,6 +20,8 @@ export class PropertyService {
     filters: PropertyFilters = {},
     pagination: PaginationParams = {}
   ): Promise<PaginatedResponse<PropertyWithDetails[]>> {
+    const timestamp = new Date().toISOString()
+    console.log(`[${timestamp}] PropertyService.getProperties called`)
     try {
       const {
         location,
@@ -40,12 +42,11 @@ export class PropertyService {
       // Calculate offset for pagination
       const offset = (page - 1) * limit
 
-      // Build query with filters
+      // Build query with filters (make token_ownership optional since it may be empty)
       let query = supabase
         .from('properties')
         .select(`
-          *,
-          token_ownership!inner(token_amount)
+          *
         `, { count: 'exact' })
 
       // Apply filters
@@ -83,15 +84,29 @@ export class PropertyService {
         throw new Error(`Failed to fetch properties: ${error.message}`)
       }
 
+      console.log(`[${timestamp}] Database query completed, got ${properties?.length || 0} properties`)
+
       // Calculate additional metrics for each property
       const propertiesWithDetails: PropertyWithDetails[] = properties?.map(property => {
-        const totalInvested = (property.total_tokens - property.available_tokens) * property.token_price
-        const fundingPercentage = ((property.total_tokens - property.available_tokens) / property.total_tokens) * 100
+        // CRITICAL: Ensure ALL numeric types are properly converted (database returns strings for numeric type)
+        const tokenPrice = parseFloat(String(property.token_price)) || 0
+        const totalValue = parseFloat(String(property.total_value)) || 0
+        const totalTokens = parseInt(String(property.total_tokens)) || 0
+        const availableTokens = parseInt(String(property.available_tokens)) || 0
+        const soldTokens = Math.max(0, totalTokens - availableTokens)
+        
+        const totalInvested = soldTokens * tokenPrice
+        const fundingPercentage = totalTokens > 0 ? ((soldTokens / totalTokens) * 100) : 0
         
         return {
           ...property,
+          token_price: tokenPrice, // Ensure it's a number
+          total_value: totalValue, // Ensure it's a number
+          total_tokens: totalTokens,
+          available_tokens: availableTokens,
           total_invested: totalInvested,
-          funding_percentage: Math.round(fundingPercentage * 100) / 100
+          funding_percentage: Math.round(fundingPercentage * 100) / 100,
+          sold_tokens: soldTokens
         }
       }) || []
 
@@ -122,18 +137,10 @@ export class PropertyService {
    */
   static async getPropertyById(id: string): Promise<ApiResponse<PropertyWithDetails>> {
     try {
-      // Get property with ownership data
+      // Get property data (ownership data handled separately since it may be empty)
       const { data: property, error: propertyError } = await supabase
         .from('properties')
-        .select(`
-          *,
-          token_ownership(
-            token_amount,
-            wallet_address,
-            purchase_date,
-            users(email)
-          )
-        `)
+        .select('*')
         .eq('id', id)
         .single()
 
@@ -149,16 +156,35 @@ export class PropertyService {
         }
       }
 
+      // Get ownership data separately to handle empty case gracefully
+      const { data: ownershipData } = await supabase
+        .from('token_ownership')
+        .select('token_amount, wallet_address, purchase_date')
+        .eq('property_id', id)
+      
       // Calculate additional metrics
-      const totalInvested = (property.total_tokens - property.available_tokens) * property.token_price
-      const fundingPercentage = ((property.total_tokens - property.available_tokens) / property.total_tokens) * 100
-      const investorCount = property.token_ownership?.length || 0
+      // CRITICAL: Ensure ALL numeric types are properly converted (database returns strings for numeric type)
+      const tokenPrice = parseFloat(String(property.token_price)) || 0
+      const totalValue = parseFloat(String(property.total_value)) || 0
+      const totalTokens = parseInt(String(property.total_tokens)) || 0
+      const availableTokens = parseInt(String(property.available_tokens)) || 0
+      const soldTokens = Math.max(0, totalTokens - availableTokens)
+      
+      const totalInvested = soldTokens * tokenPrice
+      const fundingPercentage = totalTokens > 0 ? ((soldTokens / totalTokens) * 100) : 0
+      const investorCount = ownershipData?.length || 0
 
       const propertyWithDetails: PropertyWithDetails = {
         ...property,
+        token_price: tokenPrice, // Ensure it's a number
+        total_value: totalValue, // Ensure it's a number
+        total_tokens: totalTokens,
+        available_tokens: availableTokens,
         total_invested: totalInvested,
         funding_percentage: Math.round(fundingPercentage * 100) / 100,
-        investor_count: investorCount
+        investor_count: investorCount,
+        sold_tokens: soldTokens,
+        token_ownership: ownershipData || []
       }
 
       return {
@@ -322,7 +348,20 @@ export class PropertyService {
 
 // Export legacy functions for backward compatibility
 export const fetchProperties = async () => {
+  const timestamp = new Date().toISOString()
+  console.log(`[${timestamp}] fetchProperties called - fetching fresh data from database`)
   const result = await PropertyService.getProperties()
+  console.log(`[${timestamp}] fetchProperties result:`, {
+    success: result.success,
+    dataLength: result.data?.length,
+    firstProperty: result.data?.[0] ? {
+      id: (result.data[0] as any).id,
+      name: (result.data[0] as any).name,
+      available_tokens: (result.data[0] as any).available_tokens,
+      funding_percentage: (result.data[0] as any).funding_percentage,
+      sold_tokens: (result.data[0] as any).sold_tokens
+    } : null
+  })
   if (result.success && result.data) {
     return result.data
   }

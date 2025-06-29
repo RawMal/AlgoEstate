@@ -18,7 +18,6 @@ import { AdminProtectedRoute } from '../components/admin/AdminProtectedRoute'
 import { PropertyUploadForm } from '../components/admin/PropertyUploadForm'
 import { TokenizationPanel } from '../components/admin/TokenizationPanel'
 import { PropertyDistributionView } from '../components/admin/PropertyDistributionView'
-import { KYCReviewInterface } from '../components/admin/KYCReviewInterface'
 import { AdminService } from '../services/adminService'
 import { useAdminAuth } from '../hooks/useAdminAuth'
 
@@ -364,10 +363,7 @@ function AdminDashboardContent() {
 
             {/* KYC Tab */}
             {activeTab === 'kyc' && (
-              <KYCReviewInterface onStatusUpdate={() => {
-                // Refresh stats when KYC status is updated
-                // This would trigger a refetch of the dashboard stats
-              }} />
+              <div className="text-center py-8 text-secondary-600">KYC functionality removed for demo</div>
             )}
 
             {/* Analytics Tab */}

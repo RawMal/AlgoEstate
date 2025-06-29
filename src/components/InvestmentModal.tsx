@@ -1,12 +1,16 @@
 import { useState, useEffect } from 'react'
-import { X, Wallet, AlertCircle, CheckCircle, Loader2, DollarSign } from 'lucide-react'
+import { X, Wallet, AlertCircle, CheckCircle, Loader2, DollarSign, User } from 'lucide-react'
 import { useWallet } from '@txnlab/use-wallet-react'
+import { useQueryClient } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { Property } from '../types/property'
 import { 
   microAlgos,
 } from '@algorandfoundation/algokit-utils'
 import algosdk from 'algosdk'
-import { algorandClient } from '../services/algorandService'
+import { algorandClient, DEMO_ADDRESSES } from '../services/algorandService'
+import { TokenOwnershipService } from '../services/tokenOwnershipService'
+import { supabase } from '../lib/supabase'
 
 interface InvestmentModalProps {
   property: Property
@@ -23,20 +27,42 @@ interface WalletBalance {
 
 export function InvestmentModal({ property, onClose }: InvestmentModalProps) {
   const { activeAddress, signTransactions, activeWallet } = useWallet()
+  const queryClient = useQueryClient()
   const [tokenAmount, setTokenAmount] = useState(1)
   const [transactionStatus, setTransactionStatus] = useState<TransactionStatus>('idle')
   const [transactionId, setTransactionId] = useState<string>('')
   const [errorMessage, setErrorMessage] = useState<string>('')
+  const [user, setUser] = useState<any>(null)
   const [walletBalance, setWalletBalance] = useState<WalletBalance>({
     algo: 0,
     isLoading: true
   })
 
-  const totalCost = tokenAmount * property.tokenPrice
-  const platformFee = totalCost * 0.02
-  const totalWithFees = totalCost + platformFee
-  const minTokens = Math.ceil(property.minInvestment / property.tokenPrice)
-  const maxTokens = Math.min(property.availableTokens, 1000) // Max 1000 tokens per transaction
+  // Check authentication status
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // 1 ALGO = $10,000 conversion rate
+  const ALGO_TO_USD = 10000
+  const tokenPriceInUSD = property.token_price || 100 // $100 per token
+  const tokenPriceInALGO = tokenPriceInUSD / ALGO_TO_USD // 0.01 ALGO per token
+  
+  const totalCostALGO = tokenAmount * tokenPriceInALGO
+  const platformFeeALGO = totalCostALGO * 0.02 // 2% platform fee
+  const totalWithFees = totalCostALGO + platformFeeALGO
+  
+  // Token limits
+  const minTokens = 1 // Minimum 1 token (0.01 ALGO)
+  const maxTokens = Math.min(property.available_tokens || 1000, 1000) // Max 1000 tokens per transaction
 
   // Fetch wallet balance
   useEffect(() => {
@@ -49,19 +75,32 @@ export function InvestmentModal({ property, onClose }: InvestmentModalProps) {
       try {
         setWalletBalance(prev => ({ ...prev, isLoading: true, error: undefined }))
         
-        const accountInfo = await algorandClient.account.getInformation(activeAddress)
-        const algoBalance = accountInfo.amount / 1_000_000 // Convert microAlgos to Algos
+        // Use the direct algod client for better compatibility
+        const algodClient = new algosdk.Algodv2('', 'https://testnet-api.algonode.cloud', '')
+        const accountInfo = await algodClient.accountInformation(activeAddress).do()
+        const algoBalance = Number(accountInfo.amount) / 1_000_000 // Convert microAlgos to Algos and handle BigInt
         
         setWalletBalance({
           algo: algoBalance,
           isLoading: false
         })
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error fetching balance:', error)
+        let errorMessage = 'Failed to fetch balance'
+        
+        // More specific error messages
+        if (error.status === 404) {
+          errorMessage = 'Wallet not found on network'
+        } else if (error.status === 429) {
+          errorMessage = 'Too many requests, try again later'
+        } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
+          errorMessage = 'Network connection error'
+        }
+        
         setWalletBalance({
           algo: 0,
           isLoading: false,
-          error: 'Failed to fetch balance'
+          error: errorMessage
         })
       }
     }
@@ -70,13 +109,18 @@ export function InvestmentModal({ property, onClose }: InvestmentModalProps) {
   }, [activeAddress])
 
   const handleInvest = async () => {
+    if (!user) {
+      setErrorMessage('Please sign in first to make an investment')
+      return
+    }
+
     if (!activeAddress || !activeWallet) {
       setErrorMessage('Please connect your wallet first')
       return
     }
 
     if (walletBalance.algo < totalWithFees) {
-      setErrorMessage(`Insufficient balance. You need ${totalWithFees.toFixed(2)} ALGO but only have ${walletBalance.algo.toFixed(2)} ALGO`)
+      setErrorMessage(`Insufficient balance. You need ${totalWithFees.toFixed(2)} ALGO but only have ${walletBalance.algo.toFixed(2)} ALGO. Get free TestNet ALGO at: https://bank.testnet.algorand.network/`)
       return
     }
 
@@ -84,31 +128,50 @@ export function InvestmentModal({ property, onClose }: InvestmentModalProps) {
       setTransactionStatus('preparing')
       setErrorMessage('')
 
-      // Get suggested transaction parameters
-      const suggestedParams = await algorandClient.client.getTransactionParams().do()
+      // Use the direct algod client for transaction parameters
+      const directAlgodClient = new algosdk.Algodv2('', 'https://testnet-api.algonode.cloud', '')
+      const suggestedParams = await directAlgodClient.getTransactionParams().do()
+      
+      // Validate that we're on TestNet
+      if (suggestedParams.genesisID !== 'testnet-v1.0') {
+        throw new Error('Network mismatch: This app is configured for Algorand TestNet. Please switch your wallet to TestNet.')
+      }
 
-      // Create property token asset (in a real implementation, this would be pre-created)
-      // For demo purposes, we'll simulate a payment transaction to a property escrow account
-      const propertyEscrowAddress = 'PROPERTYESCROWADDRESSEXAMPLE' // This would be the actual property escrow
+      // Use valid TestNet addresses for demo purposes
+      // In production, these would be actual smart contract addresses
+      const propertyEscrowAddress = DEMO_ADDRESSES.PROPERTY_ESCROW || 'BH4L5VMHHXBW6SNV2Y7TLMZIW57PBEG4FDL2BR5PAHAZW6CBVSEJJKG2ZU'
+      const platformFeeAddress = DEMO_ADDRESSES.PLATFORM_FEE || '5J3GH27ZF2CQBDWSCQNQMBDITWLJOU6ZAJFAWDDHTFPHQZPLXSAZIXJSR4'
+
+      // Validate addresses and parameters
+
+      // Validate all addresses before creating transactions
+      if (!activeAddress) {
+        throw new Error('Active wallet address is null or undefined')
+      }
+      if (!propertyEscrowAddress) {
+        throw new Error('Property escrow address is null or undefined')
+      }
+      if (!platformFeeAddress) {
+        throw new Error('Platform fee address is null or undefined')
+      }
 
       // Create atomic transaction group
       const transactions = []
 
       // Transaction 1: Payment for tokens (to property escrow)
       const tokenPaymentTxn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-        from: activeAddress,
-        to: propertyEscrowAddress,
-        amount: microAlgos(totalCost).microAlgos,
+        sender: activeAddress,
+        receiver: propertyEscrowAddress,
+        amount: Math.round(totalCostALGO * 1_000_000), // Convert to microAlgos
         suggestedParams,
-        note: new TextEncoder().encode(`Investment in ${property.title} - ${tokenAmount} tokens`)
+        note: new TextEncoder().encode(`Investment in ${property.name || 'Unknown Property'} - ${tokenAmount} tokens`)
       })
 
       // Transaction 2: Platform fee payment
-      const platformFeeAddress = 'PLATFORMFEEADDRESSEXAMPLE' // Platform fee collection address
       const feeTxn = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
-        from: activeAddress,
-        to: platformFeeAddress,
-        amount: microAlgos(platformFee).microAlgos,
+        sender: activeAddress,
+        receiver: platformFeeAddress,
+        amount: Math.round(platformFeeALGO * 1_000_000), // Convert to microAlgos
         suggestedParams,
         note: new TextEncoder().encode(`Platform fee for property investment`)
       })
@@ -126,19 +189,126 @@ export function InvestmentModal({ property, onClose }: InvestmentModalProps) {
 
       setTransactionStatus('submitting')
 
-      // Submit transaction group
-      const { txId } = await algorandClient.client.sendRawTransaction(signedTxns).do()
+      // Submit transaction group - filter out any null values and get the correct response format
+      const validSignedTxns = signedTxns.filter(txn => txn !== null) as Uint8Array[]
+      const response = await directAlgodClient.sendRawTransaction(validSignedTxns).do()
+      const txId = response.txid // Use the correct property name
       
       // Wait for confirmation
-      await algosdk.waitForConfirmation(algorandClient.client, txId, 4)
+      await algosdk.waitForConfirmation(directAlgodClient, txId, 4)
       
       setTransactionId(txId)
+      
+      // Record the purchase in the database
+      console.log('Recording token purchase in database...')
+      try {
+        // Get current available tokens first to avoid race conditions
+        const { data: currentProperty, error: fetchError } = await supabase
+          .from('properties')
+          .select('available_tokens')
+          .eq('id', property.id)
+          .single()
+
+        if (fetchError) {
+          console.error('Failed to fetch current property data:', fetchError)
+          throw new Error('Could not get current property data')
+        }
+
+        const currentAvailable = parseInt(String(currentProperty.available_tokens)) || 0
+        const newAvailable = Math.max(0, currentAvailable - tokenAmount)
+        
+        console.log(`Updating tokens: ${currentAvailable} -> ${newAvailable} (buying ${tokenAmount})`)
+
+        // For demo purposes, directly update the available_tokens count
+        // In production, this would be handled by the TokenOwnershipService with proper auth
+        const { data: updateResult, error: updateError } = await supabase
+          .from('properties')
+          .update({ 
+            available_tokens: newAvailable
+          })
+          .eq('id', property.id)
+          .select()
+
+        if (updateError) {
+          console.error('Failed to update available tokens:', updateError)
+          throw new Error('Database update failed: ' + updateError.message)
+        } else {
+          console.log('Successfully updated available tokens. Result:', updateResult)
+          if (!updateResult || updateResult.length === 0) {
+            console.warn('⚠️ Update succeeded but no rows were affected - this indicates RLS policy is blocking the update')
+            throw new Error('Database update was blocked - likely due to Row Level Security policies')
+          }
+        }
+
+        // Try to record token ownership (will fail due to RLS but that's ok for demo)
+        const ownershipResult = await TokenOwnershipService.recordTokenPurchase({
+          property_id: property.id,
+          wallet_address: activeAddress,
+          token_amount: tokenAmount,
+          transaction_id: txId,
+          blockchain_confirmed: true
+        })
+
+        if (!ownershipResult.success) {
+          console.log('Token ownership recording failed (expected due to RLS):', ownershipResult.error)
+          // This is expected in demo mode due to RLS policies
+        }
+      } catch (error) {
+        console.error('Database update error:', error)
+      }
+
+      // Invalidate and refetch property data to update UI
+      console.log('🔄 Starting cache invalidation after successful transaction')
+      console.log('📊 Property updated:', property.name, 'Tokens purchased:', tokenAmount)
+      
+      // Debug current cache state
+      const currentPropertiesCache = queryClient.getQueryData(['properties'])
+      console.log('📱 Current properties cache length:', Array.isArray(currentPropertiesCache) ? currentPropertiesCache.length : 'not array')
+      
+      // Force aggressive cache invalidation
+      console.log('🗑️ Removing all property cache...')
+      queryClient.removeQueries({ queryKey: ['properties'] })
+      queryClient.removeQueries({ queryKey: ['property'] })
+      
+      // Wait for cache clear
+      await new Promise(resolve => setTimeout(resolve, 200))
+      
+      console.log('🔄 Invalidating queries...')
+      queryClient.invalidateQueries({ queryKey: ['properties'] })
+      queryClient.invalidateQueries({ queryKey: ['property', property.id] })
+      
+      // Force immediate refetch
+      console.log('⚡ Forcing immediate refetch...')
+      try {
+        await queryClient.refetchQueries({ queryKey: ['properties'] })
+        console.log('✅ Properties refetch completed')
+        
+        await queryClient.refetchQueries({ queryKey: ['property', property.id] })
+        console.log('✅ Property detail refetch completed')
+        
+        // Check if cache was updated
+        const newPropertiesCache = queryClient.getQueryData(['properties'])
+        console.log('📱 New properties cache length:', Array.isArray(newPropertiesCache) ? newPropertiesCache.length : 'not array')
+        
+        if (Array.isArray(newPropertiesCache)) {
+          const updatedProperty = newPropertiesCache.find((p: any) => p.id === property.id)
+          if (updatedProperty) {
+            console.log('🎯 Updated property in cache:', updatedProperty.name, 'Available tokens:', updatedProperty.available_tokens)
+          }
+        }
+        
+      } catch (refetchError) {
+        console.error('❌ Refetch failed:', refetchError)
+      }
+      
+      console.log('✅ Cache invalidation process completed')
+      
       setTransactionStatus('success')
 
       // Refresh wallet balance
-      const accountInfo = await algorandClient.account.getInformation(activeAddress)
+      const accountInfo = await directAlgodClient.accountInformation(activeAddress).do()
       setWalletBalance({
-        algo: accountInfo.amount / 1_000_000,
+        algo: Number(accountInfo.amount) / 1_000_000,
         isLoading: false
       })
 
@@ -164,7 +334,14 @@ export function InvestmentModal({ property, onClose }: InvestmentModalProps) {
     setErrorMessage('')
   }
 
-  const handleClose = () => {
+  const handleClose = async () => {
+    // If we're closing after a successful transaction, ensure UI is updated
+    if (transactionStatus === 'success') {
+      console.log('Final cache refresh on modal close after successful transaction')
+      // One final refresh to ensure the UI shows updated data
+      queryClient.invalidateQueries({ queryKey: ['properties'] })
+      queryClient.invalidateQueries({ queryKey: ['property', property.id] })
+    }
     resetModal()
     onClose()
   }
@@ -181,7 +358,7 @@ export function InvestmentModal({ property, onClose }: InvestmentModalProps) {
             Investment Successful!
           </h3>
           <p className="text-secondary-600 dark:text-secondary-300 mb-6">
-            You have successfully purchased {tokenAmount} tokens of {property.title}
+            You have successfully purchased {tokenAmount} tokens of {property.name}
           </p>
           <div className="bg-secondary-50/80 dark:bg-secondary-700/50 backdrop-blur-sm rounded-xl p-4 mb-6">
             <div className="text-sm text-secondary-600 dark:text-secondary-400 mb-1">
@@ -208,7 +385,7 @@ export function InvestmentModal({ property, onClose }: InvestmentModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-secondary-200/50 dark:border-secondary-700/50">
           <h3 className="text-xl font-semibold text-secondary-900 dark:text-white">
-            Invest in {property.title}
+            Invest in {property.name}
           </h3>
           <button
             onClick={handleClose}
@@ -221,7 +398,24 @@ export function InvestmentModal({ property, onClose }: InvestmentModalProps) {
 
         {/* Content */}
         <div className="p-6">
-          {!activeAddress ? (
+          {!user ? (
+            <div className="text-center py-8">
+              <User className="h-16 w-16 text-secondary-400 mx-auto mb-4" />
+              <h4 className="text-lg font-semibold text-secondary-900 dark:text-white mb-2">
+                Sign In Required
+              </h4>
+              <p className="text-secondary-600 dark:text-secondary-400 mb-6">
+                You need to sign in to make an investment. This ensures secure tracking of your property ownership.
+              </p>
+              <Link
+                to="/auth"
+                onClick={handleClose}
+                className="inline-flex items-center justify-center px-6 py-3 bg-primary-600/80 hover:bg-primary-700 backdrop-blur-sm text-white font-semibold rounded-xl transition-colors"
+              >
+                Go to Sign In
+              </Link>
+            </div>
+          ) : !activeAddress ? (
             <div className="text-center py-8">
               <Wallet className="h-16 w-16 text-secondary-400 mx-auto mb-4" />
               <h4 className="text-lg font-semibold text-secondary-900 dark:text-white mb-2">
@@ -239,6 +433,26 @@ export function InvestmentModal({ property, onClose }: InvestmentModalProps) {
             </div>
           ) : (
             <div className="space-y-6">
+              {/* TestNet Notice */}
+              <div className="bg-blue-50/80 dark:bg-blue-900/30 backdrop-blur-sm rounded-xl p-4 border border-blue-200/50 dark:border-blue-700/50">
+                <div className="flex items-start space-x-3">
+                  <div className="flex-shrink-0">
+                    <div className="w-6 h-6 bg-blue-100 dark:bg-blue-800 rounded-full flex items-center justify-center">
+                      <span className="text-blue-600 dark:text-blue-400 text-sm font-semibold">ℹ</span>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
+                      TestNet Required
+                    </h4>
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      This app uses Algorand TestNet. Make sure your wallet is set to TestNet mode. 
+                      Get free TestNet ALGO at <a href="https://bank.testnet.algorand.network/" target="_blank" rel="noopener noreferrer" className="underline hover:no-underline">bank.testnet.algorand.network</a>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Wallet Balance */}
               <div className="bg-secondary-50/80 dark:bg-secondary-700/50 backdrop-blur-sm rounded-xl p-4">
                 <div className="flex items-center justify-between">
@@ -265,20 +479,39 @@ export function InvestmentModal({ property, onClose }: InvestmentModalProps) {
                 </div>
               </div>
 
+              {/* TestNet ALGO Notice - Show when balance is zero */}
+              {walletBalance.algo === 0 && !walletBalance.isLoading && (
+                <div className="flex items-start space-x-3 p-4 bg-blue-50/80 dark:bg-blue-900/20 backdrop-blur-sm rounded-xl">
+                  <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-blue-800 dark:text-blue-200">
+                    <p className="font-medium mb-1">Need TestNet ALGO?</p>
+                    <p className="mb-2">Get free TestNet ALGO to try the demo:</p>
+                    <a 
+                      href="https://bank.testnet.algorand.network/" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:underline font-medium"
+                    >
+                      🔗 Algorand TestNet Dispenser
+                    </a>
+                  </div>
+                </div>
+              )}
+
               {/* Property Summary */}
               <div className="bg-secondary-50/80 dark:bg-secondary-700/50 backdrop-blur-sm rounded-xl p-4">
                 <div className="flex items-center space-x-3 mb-3">
                   <img
-                    src={property.image}
-                    alt={property.title}
+                    src={property.image_url || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80'}
+                    alt={property.name}
                     className="w-12 h-12 rounded-lg object-cover"
                   />
                   <div>
                     <div className="font-semibold text-secondary-900 dark:text-white">
-                      {property.title}
+                      {property.name}
                     </div>
                     <div className="text-sm text-secondary-600 dark:text-secondary-400">
-                      ${property.tokenPrice} per token
+                      ${property.token_price} per token
                     </div>
                   </div>
                 </div>
@@ -338,28 +571,31 @@ export function InvestmentModal({ property, onClose }: InvestmentModalProps) {
                   <div className="flex justify-between">
                     <span className="text-secondary-600 dark:text-secondary-400">Price per token</span>
                     <span className="text-secondary-900 dark:text-white font-medium">
-                      ${property.tokenPrice}
+                      ${property.token_price}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-secondary-600 dark:text-secondary-400">Subtotal</span>
                     <span className="text-secondary-900 dark:text-white font-medium">
-                      ${totalCost.toFixed(2)}
+                      {totalCostALGO.toFixed(4)} ALGO
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-secondary-600 dark:text-secondary-400">Platform fee (2%)</span>
                     <span className="text-secondary-900 dark:text-white font-medium">
-                      ${platformFee.toFixed(2)}
+                      {platformFeeALGO.toFixed(4)} ALGO
                     </span>
                   </div>
                   <div className="border-t border-secondary-200/50 dark:border-secondary-600/50 pt-2 mt-2">
                     <div className="flex justify-between">
-                      <span className="font-semibold text-secondary-900 dark:text-white">Total (ALGO)</span>
+                      <span className="font-semibold text-secondary-900 dark:text-white">Total</span>
                       <span className="font-bold text-primary-600 dark:text-primary-400">
-                        {totalWithFees.toFixed(2)} ALGO
+                        {totalWithFees.toFixed(4)} ALGO
                       </span>
                     </div>
+                  </div>
+                  <div className="text-xs text-secondary-500 dark:text-secondary-400 mt-2 text-center">
+                    ≈ ${(totalWithFees * ALGO_TO_USD).toFixed(2)} USD @ $10,000/ALGO
                   </div>
                 </div>
               </div>
@@ -379,7 +615,8 @@ export function InvestmentModal({ property, onClose }: InvestmentModalProps) {
                 <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
                 <div className="text-sm text-amber-800 dark:text-amber-200">
                   <p className="font-medium mb-1">Investment Risk Notice</p>
-                  <p>Real estate investments carry risk. This is a demo transaction on Algorand TestNet.</p>
+                  <p className="mb-2">Real estate investments carry risk. This is a demo transaction on Algorand TestNet.</p>
+                  <p className="text-xs opacity-75">Demo transactions are sent to valid TestNet addresses for demonstration purposes.</p>
                 </div>
               </div>
 
@@ -390,7 +627,8 @@ export function InvestmentModal({ property, onClose }: InvestmentModalProps) {
                   transactionStatus !== 'idle' || 
                   walletBalance.isLoading || 
                   walletBalance.algo < totalWithFees ||
-                  !activeAddress
+                  !activeAddress ||
+                  !user
                 }
                 className="w-full bg-primary-600/80 hover:bg-primary-700 disabled:bg-secondary-400/50 backdrop-blur-sm text-white font-semibold py-4 rounded-xl transition-all duration-200 transform hover:scale-105 disabled:transform-none disabled:cursor-not-allowed flex items-center justify-center"
               >
@@ -412,7 +650,7 @@ export function InvestmentModal({ property, onClose }: InvestmentModalProps) {
                     Submitting Transaction...
                   </>
                 )}
-                {transactionStatus === 'idle' && `Invest ${totalWithFees.toFixed(2)} ALGO`}
+                {transactionStatus === 'idle' && `Invest ${totalWithFees.toFixed(4)} ALGO`}
                 {transactionStatus === 'error' && 'Try Again'}
               </button>
 

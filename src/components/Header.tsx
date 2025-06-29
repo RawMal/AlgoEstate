@@ -1,22 +1,37 @@
 import { Link, useLocation } from 'react-router-dom'
 import { useWallet } from '@txnlab/use-wallet-react'
 import { WalletButton } from '@txnlab/use-wallet-ui-react'
-import { Building2, Moon, Sun, Menu, X } from 'lucide-react'
+import { Building2, Moon, Sun, Menu, X, User } from 'lucide-react'
 import { useTheme } from '../contexts/ThemeContext'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
 
 export function Header() {
   const { activeAddress } = useWallet()
   const { theme, toggleTheme } = useTheme()
   const location = useLocation()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [user, setUser] = useState(null)
+
+  useEffect(() => {
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+    })
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   const navigation = [
     { name: 'Home', href: '/' },
     { name: 'Properties', href: '/properties' },
     { name: 'Dashboard', href: '/dashboard' },
     { name: 'Portfolio', href: '/portfolio' },
-    { name: 'KYC', href: '/kyc' },
   ]
 
   const isActive = (path: string) => location.pathname === path
@@ -66,6 +81,30 @@ export function Header() {
               )}
             </button>
             
+            {/* Auth Button */}
+            {user ? (
+              <div className="flex items-center space-x-3">
+                <span className="text-sm text-secondary-600 dark:text-secondary-300">
+                  {user.email?.split('@')[0]}
+                </span>
+                <button
+                  onClick={() => supabase.auth.signOut()}
+                  className="flex items-center px-3 py-2 text-sm font-medium text-secondary-700 dark:text-secondary-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+                >
+                  <User className="h-4 w-4 mr-2" />
+                  Sign Out
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/auth"
+                className="flex items-center px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                <User className="h-4 w-4 mr-2" />
+                Sign In
+              </Link>
+            )}
+
             <WalletButton />
 
             {/* Mobile menu button */}
