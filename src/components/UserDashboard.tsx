@@ -19,6 +19,7 @@ import {
 import { TransactionService } from '../services/TransactionService'
 import { supabase } from '../lib/supabase'
 import { TransactionModal } from './TransactionModal'
+import { AddPropertyModal } from './AddPropertyModal'
 
 interface PortfolioHolding {
   propertyId: string
@@ -66,6 +67,7 @@ export function UserDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(new Date())
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false)
+  const [isAddPropertyModalOpen, setIsAddPropertyModalOpen] = useState(false)
 
   const transactionService = new TransactionService()
 
@@ -344,14 +346,23 @@ export function UserDashboard() {
             Last updated: {lastUpdated.toLocaleTimeString()}
           </p>
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={isRefreshing}
-          className="inline-flex items-center px-4 py-2 bg-primary-600/80 hover:bg-primary-700 disabled:bg-secondary-400/50 backdrop-blur-sm text-white font-medium rounded-xl transition-colors disabled:cursor-not-allowed"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-          {isRefreshing ? 'Updating...' : 'Refresh'}
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setIsAddPropertyModalOpen(true)}
+            className="inline-flex items-center px-4 py-2 bg-green-600/80 hover:bg-green-700 backdrop-blur-sm text-white font-medium rounded-xl transition-colors"
+          >
+            <Building2 className="h-4 w-4 mr-2" />
+            List a Property
+          </button>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="inline-flex items-center px-4 py-2 bg-primary-600/80 hover:bg-primary-700 disabled:bg-secondary-400/50 backdrop-blur-sm text-white font-medium rounded-xl transition-colors disabled:cursor-not-allowed"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Updating...' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       {/* Portfolio Summary Cards */}
@@ -685,6 +696,16 @@ export function UserDashboard() {
         onClose={() => setIsTransactionModalOpen(false)}
         transactions={convertToPortfolioTransactions(transactions)}
         isLoading={isLoadingTransactions}
+      />
+
+      {/* Add Property Modal */}
+      <AddPropertyModal
+        isOpen={isAddPropertyModalOpen}
+        onClose={() => setIsAddPropertyModalOpen(false)}
+        onSuccess={async () => {
+          // Refresh all data when a property is successfully created
+          await handleRefresh()
+        }}
       />
     </div>
   )

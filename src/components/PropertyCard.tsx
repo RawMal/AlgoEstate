@@ -42,8 +42,9 @@ export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
     return 'Location not specified'
   }
 
-  // Use placeholder image since image_url doesn't exist in schema
+  // Use cover image or placeholder
   const placeholderImage = 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80'
+  const propertyImage = prop.cover_image_url || prop.image_url || placeholderImage
 
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -63,7 +64,7 @@ export function PropertyCard({ property, onInvestClick }: PropertyCardProps) {
       {/* Image - Clickable to navigate to detail page */}
       <Link to={`/property/${prop.id}`} className="block aspect-video overflow-hidden">
         <img
-          src={prop.image_url || placeholderImage}
+          src={propertyImage}
           alt={prop.name}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
         />

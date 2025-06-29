@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { MapPin, Calendar, TrendingUp, Users, Shield, ArrowLeft } from 'lucide-react'
+import { MapPin, Calendar, TrendingUp, Users, Shield, ArrowLeft, Home, Bath, Bed, Square } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { InvestmentModal } from '../components/InvestmentModal'
 import { PropertyService } from '../services/propertyService'
@@ -10,6 +10,7 @@ import type { PropertyWithDetails } from '../types/database'
 export function PropertyDetailPage() {
   const { id } = useParams()
   const [showInvestmentModal, setShowInvestmentModal] = useState(false)
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   
   const { data: propertyResult, isLoading, error } = useQuery({
     queryKey: ['property', id],
@@ -74,6 +75,62 @@ export function PropertyDetailPage() {
   const placeholderImage = 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1000&q=80'
   const expectedYield = 8.0 // Default since not in database schema
   const minInvestment = property.token_price * 2 // Default calculation
+  
+  // Extract property details from address JSONB
+  const getPropertyDetails = () => {
+    if (property.address && typeof property.address === 'object') {
+      const addr = property.address as any
+      return {
+        description: addr.description || 'No description available',
+        propertyType: addr.property_type || 'Unknown',
+        bedrooms: addr.bedrooms || 0,
+        bathrooms: addr.bathrooms || 0,
+        squarefoot: addr.squarefoot || 0
+      }
+    }
+    return {
+      description: 'No description available',
+      propertyType: 'Unknown',
+      bedrooms: 0,
+      bathrooms: 0,
+      squarefoot: 0
+    }
+  }
+  
+  const propertyDetails = getPropertyDetails()
+  
+  // Get property images
+  const getPropertyImages = () => {
+    const images: string[] = []
+    
+    // First, add cover image if available
+    if (property.cover_image_url) {
+      images.push(property.cover_image_url)
+    }
+    
+    // Then add other images from the images array
+    if (property.images && Array.isArray(property.images)) {
+      property.images.forEach((img: any) => {
+        if (img.url && !images.includes(img.url)) {
+          images.push(img.url)
+        }
+      })
+    }
+    
+    // Fallback to legacy image_url if no other images
+    if (images.length === 0 && property.image_url) {
+      images.push(property.image_url)
+    }
+    
+    // Final fallback to placeholder
+    if (images.length === 0) {
+      images.push(placeholderImage)
+    }
+    
+    return images
+  }
+  
+  const propertyImages = getPropertyImages()
 
   // Ensure consistent number conversion
   const totalTokens = parseInt(String(property.total_tokens)) || 0
@@ -107,12 +164,37 @@ export function PropertyDetailPage() {
           {/* Main Content */}
           <div className="lg:col-span-2">
             {/* Image Gallery */}
-            <div className="aspect-video rounded-2xl overflow-hidden shadow-xl mb-8">
-              <img
-                src={property.image_url || placeholderImage}
-                alt={property.name}
-                className="w-full h-full object-cover"
-              />
+            <div className="mb-8">
+              <div className="aspect-video rounded-2xl overflow-hidden shadow-xl mb-4">
+                <img
+                  src={propertyImages[selectedImageIndex]}
+                  alt={property.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              
+              {/* Image Thumbnails */}
+              {propertyImages.length > 1 && (
+                <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
+                  {propertyImages.map((image, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setSelectedImageIndex(index)}
+                      className={`aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                        selectedImageIndex === index
+                          ? 'border-primary-500 shadow-lg'
+                          : 'border-transparent hover:border-secondary-300'
+                      }`}
+                    >
+                      <img
+                        src={image}
+                        alt={`${property.name} ${index + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Property Info */}
@@ -139,7 +221,7 @@ export function PropertyDetailPage() {
 
               <div className="prose dark:prose-invert max-w-none">
                 <p className="text-secondary-600 dark:text-secondary-300 leading-relaxed">
-                  This is a premium tokenized real estate investment opportunity. The property offers excellent potential for capital appreciation and rental income through fractional ownership via blockchain tokens.
+                  {propertyDetails.description}
                 </p>
               </div>
             </div>
@@ -149,7 +231,9 @@ export function PropertyDetailPage() {
               <h2 className="text-2xl font-semibold text-secondary-900 dark:text-white mb-6">
                 Property Details
               </h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              
+              {/* Token Information */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
                 {stats.map((stat, index) => (
                   <div key={index} className="text-center">
                     <div className="p-3 bg-primary-100/50 dark:bg-primary-900/30 backdrop-blur-sm rounded-xl w-fit mx-auto mb-3">
@@ -163,6 +247,69 @@ export function PropertyDetailPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+              
+              {/* Property Features */}
+              <div className="border-t border-secondary-200/50 dark:border-secondary-700/50 pt-6">
+                <h3 className="text-lg font-semibold text-secondary-900 dark:text-white mb-4">
+                  Property Features
+                </h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  <div className="bg-secondary-50/50 dark:bg-secondary-700/30 backdrop-blur-sm rounded-lg p-4">
+                    <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-1">
+                      <Home className="h-4 w-4 mr-2" />
+                      <span className="text-sm">Property Type</span>
+                    </div>
+                    <div className="font-semibold text-secondary-900 dark:text-white capitalize">
+                      {propertyDetails.propertyType}
+                    </div>
+                  </div>
+                  <div className="bg-secondary-50/50 dark:bg-secondary-700/30 backdrop-blur-sm rounded-lg p-4">
+                    <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-1">
+                      <Bed className="h-4 w-4 mr-2" />
+                      <span className="text-sm">Bedrooms</span>
+                    </div>
+                    <div className="font-semibold text-secondary-900 dark:text-white">
+                      {propertyDetails.bedrooms}
+                    </div>
+                  </div>
+                  <div className="bg-secondary-50/50 dark:bg-secondary-700/30 backdrop-blur-sm rounded-lg p-4">
+                    <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-1">
+                      <Bath className="h-4 w-4 mr-2" />
+                      <span className="text-sm">Bathrooms</span>
+                    </div>
+                    <div className="font-semibold text-secondary-900 dark:text-white">
+                      {propertyDetails.bathrooms}
+                    </div>
+                  </div>
+                  <div className="bg-secondary-50/50 dark:bg-secondary-700/30 backdrop-blur-sm rounded-lg p-4">
+                    <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-1">
+                      <Square className="h-4 w-4 mr-2" />
+                      <span className="text-sm">Square Feet</span>
+                    </div>
+                    <div className="font-semibold text-secondary-900 dark:text-white">
+                      {propertyDetails.squarefoot.toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="bg-secondary-50/50 dark:bg-secondary-700/30 backdrop-blur-sm rounded-lg p-4">
+                    <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-1">
+                      <MapPin className="h-4 w-4 mr-2" />
+                      <span className="text-sm">Location</span>
+                    </div>
+                    <div className="font-semibold text-secondary-900 dark:text-white">
+                      {getLocation()}
+                    </div>
+                  </div>
+                  <div className="bg-secondary-50/50 dark:bg-secondary-700/30 backdrop-blur-sm rounded-lg p-4">
+                    <div className="flex items-center text-secondary-600 dark:text-secondary-400 mb-1">
+                      <Calendar className="h-4 w-4 mr-2" />
+                      <span className="text-sm">Listed</span>
+                    </div>
+                    <div className="font-semibold text-secondary-900 dark:text-white">
+                      {new Date(property.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
