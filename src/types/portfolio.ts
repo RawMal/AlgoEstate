@@ -24,6 +24,7 @@ export interface PortfolioTransaction {
   propertyTitle: string
   amount: number
   tokenAmount?: number
+  gainLoss?: number
   timestamp: string
   txId: string
   status: 'confirmed' | 'pending' | 'failed'
@@ -88,8 +89,9 @@ export interface TaxReportData {
     txId: string
   }[]
   summary: {
-    shortTermGains: number
-    longTermGains: number
+    costBasis: number
+    totalProfit: number
+    totalLoss: number
     totalDividends: number
     totalFees: number
   }

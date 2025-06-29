@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Download, FileText, Calendar, DollarSign, TrendingUp, AlertCircle, Loader2 } from 'lucide-react'
 import { PortfolioAnalyticsService } from '../../services/portfolioAnalyticsService'
 import { TaxReportData } from '../../types/portfolio'
+import jsPDF from 'jspdf'
 
 interface TaxReportGeneratorProps {
   walletAddress: string
@@ -40,8 +41,234 @@ export function TaxReportGenerator({ walletAddress }: TaxReportGeneratorProps) {
   }
 
   const handleExportPDF = () => {
-    // In a real implementation, this would generate a PDF report
-    alert('PDF export functionality would be implemented here')
+    if (!taxReport) return
+
+    const doc = new jsPDF()
+    const pageWidth = doc.internal.pageSize.width
+    const pageHeight = doc.internal.pageSize.height
+    const margin = 20
+    let yPosition = margin
+
+    // Helper function to add text with word wrapping
+    const addText = (text: string, x: number, y: number, options: any = {}) => {
+      const fontSize = options.fontSize || 10
+      const maxWidth = options.maxWidth || pageWidth - 2 * margin
+      const align = options.align || 'left'
+      
+      doc.setFontSize(fontSize)
+      if (options.bold) doc.setFont('helvetica', 'bold')
+      else doc.setFont('helvetica', 'normal')
+      
+      const lines = doc.splitTextToSize(text, maxWidth)
+      lines.forEach((line: string, index: number) => {
+        if (y + (index * fontSize * 0.5) > pageHeight - margin) {
+          doc.addPage()
+          y = margin
+        }
+        doc.text(line, x, y + (index * fontSize * 0.5), { align })
+      })
+      
+      return y + (lines.length * fontSize * 0.5)
+    }
+
+    // Add header with logo area and title
+    doc.setFillColor(59, 130, 246) // Blue color
+    doc.rect(0, 0, pageWidth, 40, 'F')
+    
+    doc.setTextColor(255, 255, 255)
+    yPosition = addText('AlgoEstate', margin, 25, { fontSize: 24, bold: true })
+    doc.setFontSize(12)
+    doc.text('Real Estate Investment Platform', pageWidth - margin, 25, { align: 'right' })
+
+    // Reset text color and add title
+    doc.setTextColor(0, 0, 0)
+    yPosition = 60
+    yPosition = addText(`Tax Report for ${taxReport.year}`, margin, yPosition, { fontSize: 18, bold: true })
+    yPosition += 10
+
+    // Add generation date
+    const generationDate = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+    yPosition = addText(`Generated on: ${generationDate}`, margin, yPosition, { fontSize: 10 })
+    yPosition = addText(`Wallet Address: ${walletAddress}`, margin, yPosition, { fontSize: 10 })
+    yPosition += 15
+
+    // Add summary section with colored boxes
+    yPosition = addText('SUMMARY', margin, yPosition, { fontSize: 14, bold: true })
+    yPosition += 10
+
+    // Create summary cards
+    const cardWidth = (pageWidth - 3 * margin) / 2
+    const cardHeight = 35
+
+    // Total Dividends Card
+    doc.setFillColor(240, 245, 255)
+    doc.rect(margin, yPosition, cardWidth, cardHeight, 'F')
+    doc.setDrawColor(59, 130, 246)
+    doc.rect(margin, yPosition, cardWidth, cardHeight, 'S')
+    
+    doc.setFontSize(10)
+    doc.setTextColor(75, 85, 99)
+    doc.text('Total Dividends', margin + 5, yPosition + 10)
+    doc.setFontSize(16)
+    doc.setTextColor(0, 0, 0)
+    doc.setFont('helvetica', 'bold')
+    doc.text(formatCurrency(taxReport.summary.totalDividends), margin + 5, yPosition + 25)
+
+    // Cost Basis Card
+    doc.setFillColor(240, 245, 255)
+    doc.rect(margin + cardWidth + 10, yPosition, cardWidth, cardHeight, 'F')
+    doc.setDrawColor(59, 130, 246)
+    doc.rect(margin + cardWidth + 10, yPosition, cardWidth, cardHeight, 'S')
+    
+    doc.setFontSize(10)
+    doc.setTextColor(75, 85, 99)
+    doc.text('Cost Basis', margin + cardWidth + 15, yPosition + 10)
+    doc.setFontSize(16)
+    doc.setTextColor(0, 0, 0)
+    doc.text(formatCurrency(taxReport.summary.costBasis), margin + cardWidth + 15, yPosition + 25)
+
+    yPosition += cardHeight + 10
+
+    // Total Profit Card (Green)
+    doc.setFillColor(240, 253, 244)
+    doc.rect(margin, yPosition, cardWidth, cardHeight, 'F')
+    doc.setDrawColor(34, 197, 94)
+    doc.rect(margin, yPosition, cardWidth, cardHeight, 'S')
+    
+    doc.setFontSize(10)
+    doc.setTextColor(75, 85, 99)
+    doc.text('Total Profit', margin + 5, yPosition + 10)
+    doc.setFontSize(16)
+    doc.setTextColor(21, 128, 61)
+    doc.text(formatCurrency(taxReport.summary.totalProfit), margin + 5, yPosition + 25)
+
+    // Total Loss Card (Red)
+    doc.setFillColor(254, 242, 242)
+    doc.rect(margin + cardWidth + 10, yPosition, cardWidth, cardHeight, 'F')
+    doc.setDrawColor(239, 68, 68)
+    doc.rect(margin + cardWidth + 10, yPosition, cardWidth, cardHeight, 'S')
+    
+    doc.setFontSize(10)
+    doc.setTextColor(75, 85, 99)
+    doc.text('Total Loss', margin + cardWidth + 15, yPosition + 10)
+    doc.setFontSize(16)
+    doc.setTextColor(185, 28, 28)
+    doc.text(formatCurrency(taxReport.summary.totalLoss), margin + cardWidth + 15, yPosition + 25)
+
+    yPosition += cardHeight + 20
+
+    // Transaction Details Section
+    if (taxReport.transactions.length > 0) {
+      yPosition = addText('TRANSACTION DETAILS', margin, yPosition, { fontSize: 14, bold: true })
+      yPosition += 10
+
+      // Table headers
+      doc.setFillColor(249, 250, 251)
+      doc.rect(margin, yPosition, pageWidth - 2 * margin, 15, 'F')
+      doc.setDrawColor(229, 231, 235)
+      doc.rect(margin, yPosition, pageWidth - 2 * margin, 15, 'S')
+
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(55, 65, 81)
+      
+      const headers = ['Date', 'Type', 'Property', 'Amount', 'Gain', 'Loss']
+      const colWidths = [25, 20, 50, 25, 25, 25]
+      let xPos = margin + 2
+
+      headers.forEach((header, index) => {
+        doc.text(header, xPos, yPosition + 10)
+        xPos += colWidths[index]
+      })
+
+      yPosition += 15
+
+      // Transaction rows
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(8)
+
+      taxReport.transactions.slice(0, 15).forEach((tx, index) => {
+        if (yPosition > pageHeight - 50) {
+          doc.addPage()
+          yPosition = margin + 20
+        }
+
+        // Alternate row colors
+        if (index % 2 === 0) {
+          doc.setFillColor(249, 250, 251)
+          doc.rect(margin, yPosition, pageWidth - 2 * margin, 12, 'F')
+        }
+
+        doc.setTextColor(0, 0, 0)
+        xPos = margin + 2
+
+        // Date
+        doc.text(tx.date, xPos, yPosition + 8)
+        xPos += colWidths[0]
+
+        // Type
+        doc.text(tx.type.charAt(0).toUpperCase() + tx.type.slice(1), xPos, yPosition + 8)
+        xPos += colWidths[1]
+
+        // Property (truncated if too long)
+        const propertyName = tx.property.length > 20 ? tx.property.substring(0, 17) + '...' : tx.property
+        doc.text(propertyName, xPos, yPosition + 8)
+        xPos += colWidths[2]
+
+        // Amount
+        doc.text(formatCurrency(tx.amount), xPos, yPosition + 8)
+        xPos += colWidths[3]
+
+        // Gain (green if positive)
+        if (tx.gainLoss && tx.gainLoss >= 0) {
+          doc.setTextColor(21, 128, 61)
+          doc.text(formatCurrency(tx.gainLoss), xPos, yPosition + 8)
+        }
+        xPos += colWidths[4]
+
+        // Loss (red if negative)
+        if (tx.gainLoss && tx.gainLoss < 0) {
+          doc.setTextColor(185, 28, 28)
+          doc.text(formatCurrency(Math.abs(tx.gainLoss)), xPos, yPosition + 8)
+        }
+
+        doc.setTextColor(0, 0, 0)
+        yPosition += 12
+      })
+
+      if (taxReport.transactions.length > 15) {
+        yPosition += 5
+        doc.setFontSize(9)
+        doc.setTextColor(107, 114, 128)
+        doc.text(`... and ${taxReport.transactions.length - 15} more transactions`, margin, yPosition)
+      }
+    }
+
+    // Add footer with disclaimer
+    const footerY = pageHeight - 40
+    doc.setFillColor(249, 250, 251)
+    doc.rect(0, footerY, pageWidth, 40, 'F')
+    
+    doc.setFontSize(8)
+    doc.setTextColor(107, 114, 128)
+    doc.setFont('helvetica', 'bold')
+    doc.text('IMPORTANT DISCLAIMER', margin, footerY + 10)
+    doc.setFont('helvetica', 'normal')
+    
+    const disclaimer = 'This report is for informational purposes only and should not be considered as tax advice. Please consult with a qualified tax professional for guidance on your specific tax situation. Cryptocurrency and tokenized asset transactions may have complex tax implications.'
+    const disclaimerLines = doc.splitTextToSize(disclaimer, pageWidth - 2 * margin)
+    
+    disclaimerLines.forEach((line: string, index: number) => {
+      doc.text(line, margin, footerY + 18 + (index * 4))
+    })
+
+    // Save the PDF
+    const filename = `tax-report-${taxReport.year}-${walletAddress.substring(0, 8)}.pdf`
+    doc.save(filename)
   }
 
   const formatCurrency = (amount: number) => {
@@ -133,37 +360,29 @@ export function TaxReportGenerator({ walletAddress }: TaxReportGeneratorProps) {
               </div>
               
               <div className="bg-secondary-50/80 dark:bg-secondary-700/50 backdrop-blur-sm rounded-xl p-4 text-center">
-                <div className={`text-2xl font-bold ${
-                  taxReport.summary.shortTermGains >= 0 
-                    ? 'text-green-600 dark:text-green-400' 
-                    : 'text-red-600 dark:text-red-400'
-                }`}>
-                  {formatCurrency(taxReport.summary.shortTermGains)}
-                </div>
-                <div className="text-sm text-secondary-600 dark:text-secondary-400">
-                  Short-term Gains
-                </div>
-              </div>
-              
-              <div className="bg-secondary-50/80 dark:bg-secondary-700/50 backdrop-blur-sm rounded-xl p-4 text-center">
-                <div className={`text-2xl font-bold ${
-                  taxReport.summary.longTermGains >= 0 
-                    ? 'text-green-600 dark:text-green-400' 
-                    : 'text-red-600 dark:text-red-400'
-                }`}>
-                  {formatCurrency(taxReport.summary.longTermGains)}
-                </div>
-                <div className="text-sm text-secondary-600 dark:text-secondary-400">
-                  Long-term Gains
-                </div>
-              </div>
-              
-              <div className="bg-secondary-50/80 dark:bg-secondary-700/50 backdrop-blur-sm rounded-xl p-4 text-center">
                 <div className="text-2xl font-bold text-secondary-900 dark:text-white">
-                  {formatCurrency(taxReport.summary.totalFees)}
+                  {formatCurrency(taxReport.summary.costBasis)}
                 </div>
                 <div className="text-sm text-secondary-600 dark:text-secondary-400">
-                  Total Fees
+                  Cost Basis
+                </div>
+              </div>
+              
+              <div className="bg-secondary-50/80 dark:bg-secondary-700/50 backdrop-blur-sm rounded-xl p-4 text-center">
+                <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                  {formatCurrency(taxReport.summary.totalProfit)}
+                </div>
+                <div className="text-sm text-secondary-600 dark:text-secondary-400">
+                  Total Profit
+                </div>
+              </div>
+              
+              <div className="bg-secondary-50/80 dark:bg-secondary-700/50 backdrop-blur-sm rounded-xl p-4 text-center">
+                <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                  {formatCurrency(taxReport.summary.totalLoss)}
+                </div>
+                <div className="text-sm text-secondary-600 dark:text-secondary-400">
+                  Total Loss
                 </div>
               </div>
             </div>

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useWallet } from '@txnlab/use-wallet-react'
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -8,7 +9,6 @@ import {
   Building2, 
   Coins, 
   Activity,
-  Calendar,
   ArrowUpRight,
   ArrowDownRight,
   Wallet,
@@ -17,7 +17,8 @@ import {
   ExternalLink
 } from 'lucide-react'
 import { TransactionService } from '../services/TransactionService'
-import { formatAlgoAmount } from '../services/algorandService'
+import { supabase } from '../lib/supabase'
+import { TransactionModal } from './TransactionModal'
 
 interface PortfolioHolding {
   propertyId: string
@@ -33,16 +34,6 @@ interface PortfolioHolding {
   lastUpdated: string
 }
 
-interface RecentTransaction {
-  id: string
-  type: 'purchase' | 'sale' | 'dividend' | 'fee'
-  propertyTitle: string
-  amount: number
-  tokenAmount?: number
-  timestamp: string
-  txId: string
-  status: 'confirmed' | 'pending' | 'failed'
-}
 
 interface PortfolioSummary {
   totalValue: number
@@ -54,98 +45,145 @@ interface PortfolioSummary {
   monthlyDividends: number
 }
 
-// Mock data for demonstration
-const mockHoldings: PortfolioHolding[] = [
-  {
-    propertyId: '1',
-    propertyTitle: 'Luxury Manhattan Penthouse',
-    propertyImage: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
-    assetId: 123456789,
-    tokensOwned: 50,
-    tokenPrice: 275,
-    currentValue: 13750,
-    purchaseValue: 12500,
-    gainLoss: 1250,
-    gainLossPercent: 10,
-    lastUpdated: '2024-01-20T10:30:00Z'
-  },
-  {
-    propertyId: '2',
-    propertyTitle: 'Modern Miami Condo',
-    propertyImage: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
-    assetId: 987654321,
-    tokensOwned: 25,
-    tokenPrice: 185,
-    currentValue: 4625,
-    purchaseValue: 4250,
-    gainLoss: 375,
-    gainLossPercent: 8.82,
-    lastUpdated: '2024-01-20T09:15:00Z'
-  },
-  {
-    propertyId: '3',
-    propertyTitle: 'Downtown Austin Office',
-    propertyImage: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
-    assetId: 456789123,
-    tokensOwned: 15,
-    tokenPrice: 320,
-    currentValue: 4800,
-    purchaseValue: 5100,
-    gainLoss: -300,
-    gainLossPercent: -5.88,
-    lastUpdated: '2024-01-20T08:45:00Z'
+// Get property image based on property name
+const getPropertyImage = (propertyName: string): string => {
+  const imageMap: { [key: string]: string } = {
+    'Luxury Manhattan Penthouse': 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+    'Modern Miami Condo': 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+    'Downtown Austin Office': 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+    'Chicago Loft': 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+    'San Francisco Victorian': 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+    'Seattle Tech Hub': 'https://images.unsplash.com/photo-1497366754035-f200968a6e72?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80',
+    'Chicago Luxury Apartment': 'https://images.unsplash.com/photo-1502672023488-70e25813eb80?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80'
   }
-]
-
-const mockTransactions: RecentTransaction[] = [
-  {
-    id: '1',
-    type: 'purchase',
-    propertyTitle: 'Luxury Manhattan Penthouse',
-    amount: 2750,
-    tokenAmount: 10,
-    timestamp: '2024-01-20T10:30:00Z',
-    txId: 'ABCD1234567890EFGH',
-    status: 'confirmed'
-  },
-  {
-    id: '2',
-    type: 'dividend',
-    propertyTitle: 'Modern Miami Condo',
-    amount: 45.50,
-    timestamp: '2024-01-19T14:20:00Z',
-    txId: 'EFGH9876543210ABCD',
-    status: 'confirmed'
-  },
-  {
-    id: '3',
-    type: 'purchase',
-    propertyTitle: 'Downtown Austin Office',
-    amount: 1600,
-    tokenAmount: 5,
-    timestamp: '2024-01-18T16:45:00Z',
-    txId: 'IJKL5555666677778',
-    status: 'confirmed'
-  },
-  {
-    id: '4',
-    type: 'fee',
-    propertyTitle: 'Platform Fee',
-    amount: 55,
-    timestamp: '2024-01-18T16:45:00Z',
-    txId: 'MNOP9999888877776',
-    status: 'confirmed'
-  }
-]
+  return imageMap[propertyName] || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80'
+}
 
 export function UserDashboard() {
   const { activeAddress } = useWallet()
-  const [holdings, setHoldings] = useState<PortfolioHolding[]>(mockHoldings)
-  const [transactions, setTransactions] = useState<RecentTransaction[]>(mockTransactions)
+  const [holdings, setHoldings] = useState<PortfolioHolding[]>([])
+  const [transactions, setTransactions] = useState<RecentTransaction[]>([])
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState(new Date())
+  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false)
 
   const transactionService = new TransactionService()
+
+  // Fetch portfolio data from Supabase
+  const { data: portfolioData, isLoading: isLoadingPortfolio, refetch: refetchPortfolio } = useQuery({
+    queryKey: ['user-portfolio', activeAddress],
+    queryFn: async () => {
+      if (!activeAddress) return null
+      
+      // Call the database function to get user portfolio
+      const { data, error } = await supabase
+        .rpc('get_user_portfolio_detailed', { user_wallet_address: activeAddress })
+      
+      if (error) {
+        console.error('Error fetching portfolio:', error)
+        return null
+      }
+      
+      // Transform data to match our interface
+      const transformedHoldings: PortfolioHolding[] = data?.map((item: {
+        property_id: string
+        property_name: string
+        property_location: string
+        property_image: string
+        property_type: string
+        token_amount: number
+        token_price: string
+        current_value: string
+        purchase_value: string
+        purchase_date: string
+        expected_yield: string
+        last_dividend: string
+        asa_id: number | null
+      }) => {
+        const tokenPrice = parseFloat(item.token_price)
+        const currentValue = parseFloat(item.current_value)
+        const purchaseValue = parseFloat(item.purchase_value)
+        const gainLoss = currentValue - purchaseValue
+        const gainLossPercent = purchaseValue > 0 ? (gainLoss / purchaseValue) * 100 : 0
+        
+        return {
+          propertyId: item.property_id,
+          propertyTitle: item.property_name,
+          propertyImage: getPropertyImage(item.property_name),
+          assetId: item.asa_id || 0,
+          tokensOwned: item.token_amount,
+          tokenPrice,
+          currentValue,
+          purchaseValue,
+          gainLoss,
+          gainLossPercent,
+          lastUpdated: item.purchase_date
+        }
+      }) || []
+      
+      return transformedHoldings
+    },
+    enabled: !!activeAddress,
+    refetchInterval: 30000, // Refetch every 30 seconds
+  })
+
+  // Update holdings when data changes
+  useEffect(() => {
+    if (portfolioData) {
+      setHoldings(portfolioData)
+    }
+  }, [portfolioData])
+
+  // Fetch recent transactions
+  const { data: transactionData, isLoading: isLoadingTransactions, refetch: refetchTransactions } = useQuery({
+    queryKey: ['recent-transactions', activeAddress],
+    queryFn: async () => {
+      if (!activeAddress || holdings.length === 0) return []
+      
+      // For now, we'll generate mock transactions based on actual holdings
+      // In production, this would fetch from blockchain indexer
+      const recentTxs: RecentTransaction[] = []
+      
+      holdings.forEach((holding, index) => {
+        // Add purchase transaction
+        recentTxs.push({
+          id: `purchase-${holding.propertyId}`,
+          type: 'purchase',
+          propertyTitle: holding.propertyTitle,
+          amount: holding.purchaseValue,
+          tokenAmount: holding.tokensOwned,
+          timestamp: holding.lastUpdated,
+          txId: `TX${holding.assetId}${index}`,
+          status: 'confirmed'
+        })
+        
+        // Add dividend transaction (if any)
+        if (Math.random() > 0.5) {
+          const dividendAmount = holding.tokensOwned * 0.5 // Mock dividend
+          recentTxs.push({
+            id: `dividend-${holding.propertyId}`,
+            type: 'dividend',
+            propertyTitle: holding.propertyTitle,
+            amount: dividendAmount,
+            timestamp: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
+            txId: `DIV${holding.assetId}${index}`,
+            status: 'confirmed'
+          })
+        }
+      })
+      
+      // Sort by timestamp
+      return recentTxs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    },
+    enabled: !!activeAddress && holdings.length > 0,
+  })
+
+  // Update transactions when data changes
+  useEffect(() => {
+    if (transactionData) {
+      setTransactions(transactionData)
+    }
+  }, [transactionData])
 
   // Calculate portfolio summary
   const portfolioSummary: PortfolioSummary = {
@@ -155,7 +193,7 @@ export function UserDashboard() {
     totalGainLossPercent: 0,
     totalProperties: holdings.length,
     totalTokens: holdings.reduce((sum, holding) => sum + holding.tokensOwned, 0),
-    monthlyDividends: 125.75 // Mock value
+    monthlyDividends: holdings.reduce((sum, holding) => sum + (holding.tokensOwned * 0.5), 0) // Mock calculation
   }
 
   portfolioSummary.totalGainLossPercent = portfolioSummary.totalInvested > 0 
@@ -170,26 +208,67 @@ export function UserDashboard() {
     refetchInterval: 30000, // Refetch every 30 seconds
   })
 
-  // Removed AlgorandSubscriber setup due to BigInt compatibility issues
-  // Will use polling-based updates instead
+  // Set up real-time subscriptions and periodic refresh
   useEffect(() => {
     if (!activeAddress) return
 
-    // Set up periodic refresh instead of real-time subscriber
+    // Set up real-time subscription for token ownership changes
+    const subscription = supabase
+      .channel('portfolio-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'token_ownership',
+          filter: `wallet_address=eq.${activeAddress}`
+        },
+        (payload) => {
+          console.log('Portfolio change detected:', payload)
+          // Refetch portfolio data when changes occur
+          refetchPortfolio()
+          refetchTransactions()
+          setLastUpdated(new Date())
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'properties'
+        },
+        (payload) => {
+          console.log('Property change detected:', payload)
+          // Refetch portfolio data when property details change
+          refetchPortfolio()
+          setLastUpdated(new Date())
+        }
+      )
+      .subscribe()
+
+    // Also set up periodic refresh as backup
     const interval = setInterval(() => {
       refetchAssets()
+      refetchPortfolio()
+      refetchTransactions()
       setLastUpdated(new Date())
     }, 30000) // Refresh every 30 seconds
 
     return () => {
+      subscription.unsubscribe()
       clearInterval(interval)
     }
-  }, [activeAddress, refetchAssets])
+  }, [activeAddress, refetchAssets, refetchPortfolio, refetchTransactions])
 
   const handleRefresh = async () => {
     setIsRefreshing(true)
     try {
-      await refetchAssets()
+      await Promise.all([
+        refetchAssets(),
+        refetchPortfolio(),
+        refetchTransactions()
+      ])
       setLastUpdated(new Date())
     } catch (error) {
       console.error('Error refreshing data:', error)
@@ -228,6 +307,15 @@ export function UserDashboard() {
       default:
         return <Activity className="h-4 w-4 text-secondary-500" />
     }
+  }
+
+  // Convert RecentTransaction to PortfolioTransaction for modal
+  const convertToPortfolioTransactions = (transactions: RecentTransaction[]) => {
+    return transactions.map(tx => ({
+      ...tx,
+      algoExplorerUrl: `https://testnet.algoexplorer.io/tx/${tx.txId}`,
+      blockNumber: Math.floor(Math.random() * 1000000) + 30000000 // Mock block number
+    }))
   }
 
   if (!activeAddress) {
@@ -355,7 +443,7 @@ export function UserDashboard() {
             {isLoadingAssets ? (
               <div className="animate-pulse bg-secondary-200 dark:bg-secondary-700 h-8 w-20 rounded"></div>
             ) : (
-              `${accountAssets?.algo.toFixed(4) || '0.0000'} ALGO`
+              `${accountAssets?.algo?.toFixed(4) || '0.0000'} ALGO`
             )}
           </div>
           <div className="text-secondary-600 dark:text-secondary-400 text-sm">
@@ -378,7 +466,27 @@ export function UserDashboard() {
               </h3>
             </div>
             <div className="p-6">
-              {holdings.length === 0 ? (
+              {isLoadingPortfolio ? (
+                <div className="animate-pulse space-y-4">
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="border border-secondary-200/50 dark:border-secondary-700/50 rounded-xl p-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="w-16 h-16 bg-secondary-200 dark:bg-secondary-700 rounded-xl"></div>
+                          <div className="space-y-2">
+                            <div className="h-4 w-32 bg-secondary-200 dark:bg-secondary-700 rounded"></div>
+                            <div className="h-3 w-24 bg-secondary-200 dark:bg-secondary-700 rounded"></div>
+                          </div>
+                        </div>
+                        <div className="text-right space-y-2">
+                          <div className="h-4 w-20 bg-secondary-200 dark:bg-secondary-700 rounded"></div>
+                          <div className="h-3 w-16 bg-secondary-200 dark:bg-secondary-700 rounded"></div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : holdings.length === 0 ? (
                 <div className="text-center py-12">
                   <Building2 className="h-16 w-16 text-secondary-400 mx-auto mb-4" />
                   <h4 className="text-lg font-semibold text-secondary-900 dark:text-white mb-2">
@@ -459,10 +567,13 @@ export function UserDashboard() {
                         </div>
                       </div>
                       <div className="flex justify-end mt-4">
-                        <button className="inline-flex items-center px-3 py-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors text-sm">
+                        <Link 
+                          to={`/property/${holding.propertyId}`}
+                          className="inline-flex items-center px-3 py-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors text-sm"
+                        >
                           <Eye className="h-4 w-4 mr-2" />
                           View Details
-                        </button>
+                        </Link>
                       </div>
                     </div>
                   ))}
@@ -481,7 +592,25 @@ export function UserDashboard() {
               </h3>
             </div>
             <div className="p-6">
-              {transactions.length === 0 ? (
+              {isLoadingTransactions ? (
+                <div className="animate-pulse space-y-4">
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="flex items-center justify-between p-3 bg-secondary-50/50 dark:bg-secondary-700/30 backdrop-blur-sm rounded-xl">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-secondary-200 dark:bg-secondary-700 rounded-lg"></div>
+                        <div className="space-y-2">
+                          <div className="h-3 w-20 bg-secondary-200 dark:bg-secondary-700 rounded"></div>
+                          <div className="h-2 w-16 bg-secondary-200 dark:bg-secondary-700 rounded"></div>
+                        </div>
+                      </div>
+                      <div className="text-right space-y-2">
+                        <div className="h-3 w-16 bg-secondary-200 dark:bg-secondary-700 rounded"></div>
+                        <div className="h-2 w-12 bg-secondary-200 dark:bg-secondary-700 rounded"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : transactions.length === 0 ? (
                 <div className="text-center py-8">
                   <Activity className="h-12 w-12 text-secondary-400 mx-auto mb-3" />
                   <p className="text-secondary-600 dark:text-secondary-400 text-sm">
@@ -537,7 +666,10 @@ export function UserDashboard() {
                 </div>
               )}
               <div className="mt-4 pt-4 border-t border-secondary-200/50 dark:border-secondary-700/50">
-                <button className="w-full inline-flex items-center justify-center px-4 py-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors text-sm">
+                <button 
+                  onClick={() => setIsTransactionModalOpen(true)}
+                  className="w-full inline-flex items-center justify-center px-4 py-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors text-sm"
+                >
                   <ExternalLink className="h-4 w-4 mr-2" />
                   View All Transactions
                 </button>
@@ -546,6 +678,14 @@ export function UserDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Transaction Modal */}
+      <TransactionModal
+        isOpen={isTransactionModalOpen}
+        onClose={() => setIsTransactionModalOpen(false)}
+        transactions={convertToPortfolioTransactions(transactions)}
+        isLoading={isLoadingTransactions}
+      />
     </div>
   )
 }

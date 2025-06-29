@@ -94,6 +94,8 @@ export function TransactionHistory({ transactions, isLoading }: TransactionHisto
       'Property',
       'Amount',
       'Token Amount',
+      'Gain',
+      'Loss',
       'Status',
       'Transaction ID'
     ]
@@ -104,6 +106,8 @@ export function TransactionHistory({ transactions, isLoading }: TransactionHisto
       tx.propertyTitle,
       formatCurrency(tx.amount),
       tx.tokenAmount?.toString() || '',
+      tx.gainLoss && tx.gainLoss >= 0 ? formatCurrency(tx.gainLoss) : '',
+      tx.gainLoss && tx.gainLoss < 0 ? formatCurrency(Math.abs(tx.gainLoss)) : '',
       tx.status,
       tx.txId
     ])

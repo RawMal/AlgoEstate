@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useWallet } from '@txnlab/use-wallet-react'
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -335,10 +336,13 @@ export function PortfolioView() {
                       </div>
 
                       <div className="flex justify-end mt-4">
-                        <button className="inline-flex items-center px-4 py-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors">
+                        <Link 
+                          to={`/property/${holding.propertyId}`}
+                          className="inline-flex items-center px-4 py-2 text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors"
+                        >
                           <Eye className="h-4 w-4 mr-2" />
                           View Details
-                        </button>
+                        </Link>
                       </div>
                     </div>
                   ))}

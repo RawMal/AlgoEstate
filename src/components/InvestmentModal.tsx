@@ -240,18 +240,26 @@ export function InvestmentModal({ property, onClose }: InvestmentModalProps) {
           }
         }
 
-        // Try to record token ownership (will fail due to RLS but that's ok for demo)
-        const ownershipResult = await TokenOwnershipService.recordTokenPurchase({
-          property_id: property.id,
-          wallet_address: activeAddress,
-          token_amount: tokenAmount,
-          transaction_id: txId,
-          blockchain_confirmed: true
-        })
+        // Record token ownership using the database function that bypasses RLS
+        try {
+          const { data: ownershipResult, error: ownershipError } = await supabase
+            .rpc('record_token_purchase', {
+              p_property_id: property.id,
+              p_wallet_address: activeAddress,
+              p_token_amount: tokenAmount,
+              p_transaction_id: txId
+            })
 
-        if (!ownershipResult.success) {
-          console.log('Token ownership recording failed (expected due to RLS):', ownershipResult.error)
-          // This is expected in demo mode due to RLS policies
+          if (ownershipError) {
+            console.error('Token ownership recording failed:', ownershipError)
+          } else {
+            console.log('✅ Token ownership recorded successfully:', ownershipResult)
+            // Invalidate user portfolio cache
+            queryClient.invalidateQueries({ queryKey: ['user-portfolio', activeAddress] })
+            queryClient.invalidateQueries({ queryKey: ['recent-transactions', activeAddress] })
+          }
+        } catch (recordError) {
+          console.error('Error recording token ownership:', recordError)
         }
       } catch (error) {
         console.error('Database update error:', error)

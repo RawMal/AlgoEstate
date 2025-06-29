@@ -339,9 +339,10 @@ export class PortfolioAnalyticsService {
       const allTransactions: any[] = []
       let totalGainLoss = 0
       let dividendIncome = 0
-      let shortTermGains = 0
-      let longTermGains = 0
+      let totalProfit = 0
+      let totalLoss = 0
       let totalFees = 0
+      let costBasis = 0
 
       for (const holding of holdings) {
         for (const transaction of holding.transactions) {
@@ -363,16 +364,15 @@ export class PortfolioAnalyticsService {
             // Calculate tax implications
             if (transaction.type === 'dividend') {
               dividendIncome += transaction.amount
+            } else if (transaction.type === 'purchase') {
+              costBasis += transaction.amount
             } else if (transaction.type === 'sale' && txData.gainLoss) {
-              const purchaseDate = new Date(holding.purchaseDate)
-              const isLongTerm = (txDate.getTime() - purchaseDate.getTime()) > (365 * 24 * 60 * 60 * 1000)
-              
-              if (isLongTerm) {
-                longTermGains += txData.gainLoss
-              } else {
-                shortTermGains += txData.gainLoss
-              }
               totalGainLoss += txData.gainLoss
+              if (txData.gainLoss > 0) {
+                totalProfit += txData.gainLoss
+              } else {
+                totalLoss += Math.abs(txData.gainLoss)
+              }
             } else if (transaction.type === 'fee') {
               totalFees += transaction.amount
             }
@@ -386,8 +386,9 @@ export class PortfolioAnalyticsService {
         dividendIncome,
         transactions: allTransactions,
         summary: {
-          shortTermGains,
-          longTermGains,
+          costBasis,
+          totalProfit,
+          totalLoss,
           totalDividends: dividendIncome,
           totalFees
         }
@@ -421,7 +422,8 @@ export class PortfolioAnalyticsService {
       'Token Price',
       'Current Value',
       'Purchase Value',
-      'Gain/Loss',
+      'Gain',
+      'Loss',
       'Gain/Loss %',
       'Expected Yield',
       'Purchase Date',
@@ -436,7 +438,8 @@ export class PortfolioAnalyticsService {
       `$${holding.tokenPrice.toFixed(2)}`,
       `$${holding.currentValue.toFixed(2)}`,
       `$${holding.purchaseValue.toFixed(2)}`,
-      `$${holding.gainLoss.toFixed(2)}`,
+      holding.gainLoss >= 0 ? `$${holding.gainLoss.toFixed(2)}` : '$0.00',
+      holding.gainLoss < 0 ? `$${Math.abs(holding.gainLoss).toFixed(2)}` : '$0.00',
       `${holding.gainLossPercent.toFixed(2)}%`,
       `${holding.expectedYield.toFixed(1)}%`,
       new Date(holding.purchaseDate).toLocaleDateString(),
@@ -469,7 +472,8 @@ export class PortfolioAnalyticsService {
       'Amount',
       'Token Amount',
       'Cost Basis',
-      'Gain/Loss',
+      'Gain',
+      'Loss',
       'Transaction ID'
     ]
 
@@ -480,7 +484,8 @@ export class PortfolioAnalyticsService {
       `$${tx.amount.toFixed(2)}`,
       tx.tokenAmount?.toString() || '',
       tx.costBasis ? `$${tx.costBasis.toFixed(2)}` : '',
-      tx.gainLoss ? `$${tx.gainLoss.toFixed(2)}` : '',
+      tx.gainLoss && tx.gainLoss >= 0 ? `$${tx.gainLoss.toFixed(2)}` : '',
+      tx.gainLoss && tx.gainLoss < 0 ? `$${Math.abs(tx.gainLoss).toFixed(2)}` : '',
       tx.txId
     ])
 
